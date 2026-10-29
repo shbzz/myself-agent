@@ -8,7 +8,7 @@
 
 ## 网页访问
 
-生产入口：https://agent.foxbh.top，使用专用网页账号登录。模型调用和容器验收仍在 home，阿里云提供 HTTPS 与认证入口；访问无需保持 Windows 的 SSH 转发。服务器认证与部署配置保存在受限运维目录，不随公共应用源码分发。
+生产入口：https://agent.foxbh.top:52117，使用专用网页账号登录。模型调用和容器验收仍在 home，阿里云提供 HTTPS 与认证入口；访问无需保持 Windows 的 SSH 转发。服务器认证与部署配置保存在受限运维目录，不随公共应用源码分发。
 
 home 已启动 `myself-agent-web.service`，监听 `127.0.0.1:8787`。也可通过 SSH 转发维护：
 

@@ -22,3 +22,7 @@ else
   printf 'Node.js is required for static JavaScript syntax checks.\n' >&2
   exit 2
 fi
+
+if [[ -f "$APP/frontend/package.json" ]]; then
+  npm --prefix "$APP/frontend" run build
+fi

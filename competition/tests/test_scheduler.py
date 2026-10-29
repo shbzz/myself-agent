@@ -6,11 +6,12 @@ from contextlib import nullcontext
 
 import pytest
 from conftest import PARSER, STATS
+from pydantic import ValidationError
+
 from myself_agent.scenarios import SCENARIOS, get_scenario
 from myself_agent.scheduler import affected_tasks, ready_batch
 from myself_agent.schema import Plan, SourceFile
 from myself_agent.workflow import Workflow
-from pydantic import ValidationError
 
 SOURCES = {
     "parser.py": PARSER,

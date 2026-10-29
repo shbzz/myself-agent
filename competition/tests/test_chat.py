@@ -8,6 +8,7 @@ from dataclasses import replace
 import pytest
 from conftest import PARSER, STATS
 from fastapi.testclient import TestClient
+
 from myself_agent.jobs import JobManager
 from myself_agent.schema import Plan, SourceFile
 from myself_agent.tracking import changes, file_versions

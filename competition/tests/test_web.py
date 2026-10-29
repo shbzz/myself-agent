@@ -7,10 +7,11 @@ import zipfile
 from dataclasses import replace
 
 from fastapi.testclient import TestClient
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+
 from myself_agent.jobs import JobManager
 from myself_agent.web import create_app
 from myself_agent.workflow import write_json
-from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 
 def payload():

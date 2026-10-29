@@ -3,6 +3,7 @@ from contextlib import nullcontext
 
 import pytest
 from conftest import PARSER, STATS
+
 from myself_agent.schema import Plan, SourceFile
 from myself_agent.workflow import Workflow
 
