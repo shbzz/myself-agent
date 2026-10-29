@@ -1,21 +1,11 @@
 name: Application hygiene
 
 on:
-  pull_request:
-    paths:
-      - "competition/**"
-      - ".githooks/**"
-      - "CONTRIBUTING.md"
-      - ".github/workflows/application-hygiene.yml"
+  pull_request: {}
   push:
     branches:
       - main
       - "codex/**"
-    paths:
-      - "competition/**"
-      - ".githooks/**"
-      - "CONTRIBUTING.md"
-      - ".github/workflows/application-hygiene.yml"
 
 permissions:
   contents: read
