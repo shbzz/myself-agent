@@ -5,7 +5,8 @@ import ReactMarkdown from 'react-markdown';
 
 type Workspace = {id: string; name: string};
 type Session = {id: string; title: string};
-type Run = {id: string; status: string; error_type?: string};
+type Run = {id: string; status: string; text: string; attachment_ids: string[]; created: string; updated: string; error_type?: string};
+type Attachment = {id: string; filename: string};
 type Message = {sequence: number; message: {type: string; data: {content: unknown}}};
 type Trace = {sequence: number; run_id: string; kind: string; timestamp: string; payload: Record<string, any>};
 const labels: Record<string, string> = {queued: '排队中', running: '执行中', succeeded: '已结束', failed: '执行失败', cancelled: '已停止', interrupted: '执行中断'};
@@ -25,6 +26,30 @@ function text(content: unknown): string {
   return '';
 }
 
+function toolTitle(event: Trace) {
+  const names: Record<string, string> = {execute: '运行命令', read_file: '读取文件', write_file: '创建文件', edit_file: '修改文件', ls: '浏览目录', grep: '搜索内容', glob: '查找文件', write_todos: '更新计划'};
+  const args = event.payload.inputs || {};
+  let description = args.command || args.file_path || args.path || args.pattern || '';
+  if (!description && event.payload.input) description = event.payload.input;
+  const image = event.payload.name === 'read_file' && /\.(png|jpe?g|gif|webp)$/i.test(args.file_path || '');
+  return `${image ? '读取图片' : names[event.payload.name] || event.payload.name}${description ? ' · ' + String(description).split('\n')[0].slice(0, 100) : ''}`;
+}
+
+function ToolActivity({event, events}: {event: Trace; events: Trace[]}) {
+  const end = events.find(e => ['tool.finished', 'tool.failed'].includes(e.kind) && e.payload.tool_call_id === event.payload.tool_call_id);
+  const failed = end && (end.kind === 'tool.failed' || end.payload.failed || /Command failed with exit code/.test(end.payload.output || ''));
+  const elapsed = end ? end.payload.elapsed_ms ?? new Date(end.timestamp).getTime() - new Date(event.timestamp).getTime() : null;
+  const args = event.payload.inputs;
+  return <details className="inline-tool"><summary><span className="tool-glyph">{event.payload.name === 'execute' ? '⌘' : '↳'}</span><span className="tool-title">{toolTitle(event)}</span><small>{end ? `${failed ? '失败' : '已结束'} · ${(elapsed / 1000).toFixed(2)} 秒` : '运行中…'}</small><span className="disclosure">⌄</span></summary><div className="tool-expanded"><h4>{event.payload.name === 'execute' ? '执行的命令' : '调用参数'}</h4><pre>{args?.command || (args ? JSON.stringify(args, null, 2) : event.payload.input)}</pre><h4>运行结果</h4><pre>{end ? end.payload.output || end.payload.error_type || '完成，无文本输出' : '等待工具返回…'}</pre><small>开始于 {new Date(event.timestamp).toLocaleTimeString('zh-CN', {hour12: false})}{end && ` · 耗时 ${(elapsed / 1000).toFixed(2)} 秒`}</small></div></details>;
+}
+
+function AssistantMessage({data}: {data: any}) {
+  const reasoning = data.additional_kwargs?.reasoning_content;
+  const answer = text(data.content);
+  if (!reasoning && !answer) return null;
+  return <article className="message assistant">{reasoning && <details className="reasoning"><summary>✦ 思考过程 <span>点击展开</span></summary><div>{reasoning}</div></details>}{answer && <div><ReactMarkdown>{answer}</ReactMarkdown></div>}</article>;
+}
+
 function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspace, setWorkspace] = useState('');
@@ -36,6 +61,11 @@ function App() {
   const [drafts, setDrafts] = useState<Record<string, string>>(() => JSON.parse(localStorage.getItem('agent-drafts') || '{}'));
   const [error, setError] = useState('');
   const [sending, setSending] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [attachments, setAttachments] = useState<Record<string, Attachment[]>>({});
+  const [thinking, setThinking] = useState('low');
+  const [imagePreview, setImagePreview] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
   const [connected, setConnected] = useState(false);
   const [groupOpen, setGroupOpen] = useState(true);
   const [nav, setNav] = useState(window.innerWidth > 760);
@@ -48,6 +78,7 @@ function App() {
   const last = runs.at(-1);
   const active = sending || ['running', 'queued'].includes(last?.status || '');
   const draft = drafts[session || workspace] || '';
+  const attached = attachments[session] || [];
   const pendingRequest = useRef<{session: string; text: string; id: string} | null>(null);
   function fail(e: unknown) {setError(e instanceof Error ? e.message : '连接失败');}
   function setDraft(value: string) {setDrafts(old => ({...old, [session || workspace]: value}));}
@@ -112,21 +143,42 @@ function App() {
     } catch (e) {fail(e);}
   }
   async function send() {
-    if (!draft.trim() || active) return;
+    if ((!draft.trim() && !attached.length) || active || uploading) return;
     setSending(true); setError('');
     const content = draft;
     try {
       const id = session || await newSession(); if (!id) return;
+      const signature = JSON.stringify([content, attached.map(a => a.id), thinking]);
       const previous = pendingRequest.current;
-      const requestId = previous?.session === id && previous.text === content ? previous.id : crypto.randomUUID().replaceAll('-', '');
-      pendingRequest.current = {session: id, text: content, id: requestId};
-      const run = await api('/sessions/' + id + '/messages', {request_id: requestId, text: content});
+      const requestId = previous?.session === id && previous.text === signature ? previous.id : crypto.randomUUID().replaceAll('-', '');
+      pendingRequest.current = {session: id, text: signature, id: requestId};
+      const run = await api('/sessions/' + id + '/messages', {request_id: requestId, text: content, attachment_ids: attached.map(a => a.id), reasoning_effort: thinking});
       pendingRequest.current = null;
       if (currentSession.current === id || !session) {
         setRuns(old => old.some(r => r.id === run.id) ? old : [...old, run]);
         setDrafts(old => ({...old, [id]: '', [workspace]: ''}));
+        setAttachments(old => ({...old, [id]: []}));
       }
     } catch (e) {fail(e);} finally {setSending(false);}
+  }
+  async function uploadImages(files: File[]) {
+    if (!workspace || uploading || sending) return;
+    setUploading(true); setError('');
+    try {
+      const id = session || await newSession(); if (!id) return;
+      if (!session) setDrafts(old => ({...old, [id]: draft}));
+      let count = (attachments[id] || []).length;
+      for (const file of files) {
+        if (count >= 4) throw Error('每条消息最多 4 张图片');
+        if (!file.type.startsWith('image/')) continue;
+        if (file.size > 6 * 1024 * 1024) throw Error('单张图片不能超过 6 MiB');
+        const encoded = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader(); reader.onload = () => resolve(String(reader.result).split(',')[1]); reader.onerror = reject; reader.readAsDataURL(file);
+        });
+        const item = await api('/sessions/' + id + '/attachments', {filename: file.name, data_base64: encoded});
+        setAttachments(old => ({...old, [id]: [...(old[id] || []), item]})); count++;
+      }
+    } catch(e) {fail(e);} finally {setUploading(false);}
   }
   async function stop() {
     if (!last) return;
@@ -146,11 +198,11 @@ function App() {
   return <div className={`workbench ${nav ? '' : 'nav-closed'} ${tracker ? '' : 'tracker-closed'}`} style={{'--nav': `${widths[0]}px`, '--tracker': `${widths[1]}px`} as React.CSSProperties}>
     {nav && <aside className="navigation">
       <header><strong className="brand">m<span>·</span> <small>myself agent</small></strong><button onClick={() => setNav(false)} aria-label="收起左侧栏">◧</button></header>
-      <div className="workspace-picker"><select disabled={sending} aria-label="选择工作区" value={workspace} onChange={e => setWorkspace(e.target.value)}><option value="" disabled>选择工作区</option>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select><button disabled={sending} onClick={createWorkspace} aria-label="创建工作区">＋</button></div>
+      <div className="workspace-picker"><select disabled={sending || uploading} aria-label="选择工作区" value={workspace} onChange={e => setWorkspace(e.target.value)}><option value="" disabled>选择工作区</option>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select><button disabled={sending || uploading} onClick={createWorkspace} aria-label="创建工作区">＋</button></div>
       <button className="new-session" disabled={!workspace || sending} onClick={newSession}>＋ 新会话</button>
       <input className="search" aria-label="搜索会话" placeholder="搜索会话" value={search} onChange={e => setSearch(e.target.value)}/>
       <button className="group" onClick={() => setGroupOpen(!groupOpen)} aria-expanded={groupOpen}>{groupOpen ? '⌄' : '›'} 工作区会话 <span>{sessions.length}</span></button>
-      {groupOpen && <nav>{sessions.filter(s => s.title.includes(search)).map(s => <button className={session === s.id ? 'selected session' : 'session'} key={s.id} disabled={sending} onClick={() => setSession(s.id)}>{s.title}<small>{s.id.slice(0, 8)}</small></button>)}</nav>}
+      {groupOpen && <nav>{sessions.filter(s => s.title.includes(search)).map(s => <button className={session === s.id ? 'selected session' : 'session'} key={s.id} disabled={sending || uploading} onClick={() => setSession(s.id)}>{s.title}<small>{s.id.slice(0, 8)}</small></button>)}</nav>}
       <footer><span className={connected ? 'dot online' : 'dot'}/> {connected ? '执行追踪已连接' : '选择会话开始'}<small>通用 Agent · 预览</small></footer>
       <div className="resizer right" role="separator" tabIndex={0} aria-label="调整左侧栏宽度" aria-orientation="vertical" onPointerDown={e => resize(0, e)} onKeyDown={e => {if (['ArrowLeft','ArrowRight'].includes(e.key)) setWidths([Math.max(220, Math.min(550, widths[0] + (e.key === 'ArrowRight' ? 20 : -20))), widths[1]]);}}/>
     </aside>}
@@ -158,12 +210,19 @@ function App() {
       <header><div>{!nav && <button onClick={() => setNav(true)} aria-label="展开左侧栏">◨</button>}<span>{sessions.find(s => s.id === session)?.title || '新任务'}<small>{workspaces.find(w => w.id === workspace)?.name || '创建一个工作区开始'}</small></span></div><button onClick={() => setTracker(!tracker)} aria-expanded={tracker}>◫ 任务追踪</button></header>
       {error && <div role="alert" className="error">{error}<button onClick={() => setError('')}>关闭</button></div>}
       <section className="messages" aria-label="会话消息">
-        {!messages.length && <div className="welcome"><div className="mark">m·</div><h1>从一个想法，到真实完成。</h1><p>描述任务，让 Agent 在你的工作区读取、修改并验证。</p><button onClick={() => setDraft('创建一个待办事项命令行工具，使用 JSON 保存数据，支持添加、完成和列表，编写 unittest 并运行测试。')}>试试：创建待办事项工具并测试 ↗</button></div>}
-        {messages.filter(m => ['human', 'ai'].includes(m.message.type) && text(m.message.data.content)).map(m => <article className={m.message.type === 'human' ? 'message user' : 'message assistant'} key={m.sequence}><small>{m.message.type === 'human' ? '你' : 'Myself Agent'}</small><div>{m.message.type === 'ai' ? <ReactMarkdown>{text(m.message.data.content)}</ReactMarkdown> : text(m.message.data.content)}</div></article>)}
-        {active && <div className="working"><span className="pulse"/>正在处理任务，右侧可查看工具执行记录…</div>}
+        {!runs.length && <div className="welcome"><div className="mark">m·</div><h1>一起，探索想法的下一步。</h1><p>提出任务，添加图片，在这里看见每一步执行。</p><button onClick={() => setDraft('创建一个待办事项命令行工具，使用 JSON 保存数据，支持添加、完成和列表，编写 unittest 并运行测试。')}>创建工具并运行测试 ↗</button></div>}
+        {runs.map(run => <section className="conversation-turn" key={run.id}>
+          <article className="message user"><small>你</small>{run.attachment_ids?.length > 0 && <div className="message-images">{run.attachment_ids.map(id => <button key={id} onClick={() => setImagePreview(id)} aria-label="放大会话图片"><img src={'/next/api/attachments/' + id} alt="会话附件"/></button>)}</div>}{run.text && <div>{run.text}</div>}</article>
+          {events.filter(e => e.run_id === run.id).map(e => e.kind === 'tool.started' ? <ToolActivity key={e.sequence} event={e} events={events}/> : e.kind === 'message.created' && e.payload.type === 'ai' ? <AssistantMessage key={e.sequence} data={e.payload.data}/> : e.kind === 'image.submitted' ? <details className="inline-tool image-activity" key={e.sequence}><summary><span className="tool-glyph">▧</span><span>查看图片 · {e.payload.attachment_ids.length} 张</span><small>原生视觉输入</small></summary><div className="message-images">{e.payload.attachment_ids.map((id: string) => <button key={id} onClick={() => setImagePreview(id)}><img src={'/next/api/attachments/' + id} alt="提交给模型的图片"/></button>)}</div></details> : null)}
+          {!['queued','running'].includes(run.status) && <div className="turn-status">{labels[run.status]} · {(Math.max(0, new Date(run.updated).getTime() - new Date(run.created).getTime()) / 1000).toFixed(1)} 秒</div>}
+        </section>)}
+        {active && <div className="working"><span className="pulse"/>正在处理任务…</div>}
         <div ref={bottom}/>
       </section>
-      <div className="composer-zone"><div className="composer-meta"><span>⌂ {workspaces.find(w => w.id === workspace)?.name || '尚未选择工作区'}</span><span>DeepSeek Flash</span></div><div className="composer"><textarea aria-label="任务输入" placeholder="提出任何任务，或继续说明需要修改的地方…" value={draft} disabled={!workspace} onChange={e => setDraft(e.target.value)} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); send();}}}/><div><span>文件 · 搜索 · Shell / Python</span>{active ? <button className="send stop" onClick={stop} disabled={sending}>■ 停止</button> : <button className="send" onClick={send} disabled={!workspace || !draft.trim()}>↑ 发送</button>}</div></div><small>独立工作区 · Python 离线执行 · Enter 发送，Shift+Enter 换行</small></div>
+      <div className="composer-zone"><div className="composer-meta"><span>⌂ {workspaces.find(w => w.id === workspace)?.name || '尚未选择工作区'}</span><span>DeepSeek Flash</span></div><div className="composer" onDragOver={e => e.preventDefault()} onDrop={e => {e.preventDefault(); uploadImages(Array.from(e.dataTransfer.files));}}>
+        {attached.length > 0 && <div className="draft-images">{attached.map(item => <figure key={item.id}><img src={'/next/api/attachments/' + item.id} alt={item.filename}/><button aria-label={'移除图片 ' + item.filename} onClick={() => setAttachments(old => ({...old, [session]: attached.filter(a => a.id !== item.id)}))}>×</button><figcaption>{item.filename}</figcaption></figure>)}</div>}
+        <textarea aria-label="任务输入" placeholder="描述要构建的内容，或粘贴图片开始…" value={draft} disabled={!workspace || uploading} onChange={e => setDraft(e.target.value)} onPaste={e => {const files = Array.from(e.clipboardData.files); if (files.length) {e.preventDefault(); uploadImages(files);}}} onKeyDown={e => {if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {e.preventDefault(); send();}}}/>
+        <div><div className="composer-actions"><input ref={fileInput} hidden type="file" accept="image/png,image/jpeg,image/gif,image/webp" multiple onChange={e => {uploadImages(Array.from(e.target.files || [])); e.target.value = '';}}/><button className="attach-button" aria-label="添加图片" onClick={() => fileInput.current?.click()} disabled={!workspace || uploading}>{uploading ? '上传中…' : '＋'}</button><select aria-label="思考程度" value={thinking} onChange={e => setThinking(e.target.value)}><option value="off">关闭思考</option><option value="low">轻量思考</option><option value="high">深入思考</option><option value="max">极致思考</option></select></div>{active ? <button className="send stop" onClick={stop} disabled={sending || uploading}>■ 停止</button> : <button className="send" onClick={send} disabled={!workspace || uploading || (!draft.trim() && !attached.length)}>↑ 发送</button>}</div></div><small>工具与图片记录直接显示在对话中 · Enter 发送，Shift+Enter 换行</small></div>
     </main>
     {tracker && <aside className="tracker">
       <div className="resizer left" role="separator" tabIndex={0} aria-label="调整右侧栏宽度" aria-orientation="vertical" onPointerDown={e => resize(1, e)} onKeyDown={e => {if (['ArrowLeft','ArrowRight'].includes(e.key)) setWidths([widths[0], Math.max(220, Math.min(550, widths[1] + (e.key === 'ArrowLeft' ? 20 : -20)))]);}}/>
@@ -173,9 +232,10 @@ function App() {
       <div className="tabs">{[['tools','工具'],['changes','修改'],['events','事件']].map(([id,name]) => <button className={tab === id ? 'active' : ''} key={id} onClick={() => setTab(id)}>{name}</button>)}</div>
       <section className="trace-body">{tab === 'tools' && tools.map(e => {
         const end = events.find(f => ['tool.finished','tool.failed'].includes(f.kind) && f.payload.tool_call_id === e.payload.tool_call_id);
-        return <details className="tool-card" key={e.sequence}><summary><span>{end ? end.kind === 'tool.failed' ? '!' : '✓' : '◉'} {e.payload.name}</span><small>{new Date(e.timestamp).toLocaleTimeString('zh-CN', {hour12: false})}</small></summary><pre>{e.payload.input}</pre><pre>{end ? end.payload.output || end.payload.error_type : '正在执行…'}</pre></details>;
+        return <details className="tool-card" key={e.sequence}><summary><span>{end ? (end.kind === 'tool.failed' || end.payload.failed || /Command failed with exit code/.test(end.payload.output || '')) ? '!' : '✓' : '◉'} {e.payload.name}</span><small>{new Date(e.timestamp).toLocaleTimeString('zh-CN', {hour12: false})}</small></summary><pre>{e.payload.input}</pre><pre>{end ? end.payload.output || end.payload.error_type : '正在执行…'}</pre></details>;
       })}{tab === 'changes' && changes.map(e => <details className="tool-card" key={e.sequence}><summary>{e.payload.path}</summary><pre className="diff">{e.payload.diff}</pre></details>)}{tab === 'events' && events.map(e => <details className="tool-card" key={e.sequence}><summary>{e.kind}<small>#{e.sequence}</small></summary><pre>{JSON.stringify(e.payload, null, 2)}</pre></details>)}{!events.length && <div className="empty-trace">⌁<h3>每一步，都有记录。</h3><p>任务开始后，在这里查看真实工具结果和文件变更。</p></div>}</section>
     </aside>}
+    {imagePreview && <div className="image-overlay" role="dialog" aria-modal="true" aria-label="图片预览" onClick={() => setImagePreview('')}><button aria-label="关闭图片预览" onClick={() => setImagePreview('')}>×</button><img src={'/next/api/attachments/' + imagePreview} alt="图片预览" onClick={e => e.stopPropagation()}/></div>}
   </div>;
 }
 

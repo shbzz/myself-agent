@@ -2,7 +2,9 @@
 
 import argparse
 import difflib
+import re
 import threading
+import time
 from pathlib import Path
 
 from deepagents import create_deep_agent
@@ -12,9 +14,10 @@ from langchain_core.messages import ToolMessage, message_to_dict
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from myself_agent.config import DEFAULT_CONFIG, load_settings
+from myself_agent.general_model import general_model_session
 from myself_agent.general_sandbox import WorkspaceSandbox
 from myself_agent.general_store import AgentStore
-from myself_agent.provider import model_session, platform_owned_delegation
+from myself_agent.provider import platform_owned_delegation
 
 
 def snapshot(directory):
@@ -37,8 +40,10 @@ class Trace(BaseCallbackHandler):
         self.store, self.run_id, self.directory = store, run_id, directory
         self.before = snapshot(directory)
         self.lock = threading.Lock()
+        self.started = {}
 
     def on_tool_start(self, serialized, input_str, *, run_id, **kwargs):
+        self.started[str(run_id)] = time.monotonic()
         self.store.event(
             self.run_id,
             "tool.started",
@@ -46,17 +51,25 @@ class Trace(BaseCallbackHandler):
                 "tool_call_id": str(run_id),
                 "name": serialized.get("name", "tool"),
                 "input": input_str[:16000],
+                "inputs": kwargs.get("inputs"),
             },
         )
 
     def on_tool_end(self, output, *, run_id, **kwargs):
         content = getattr(output, "content", output)
+        exit_match = re.search(r"\[Command failed with exit code (-?\d+)\]", str(content))
+        failed = getattr(output, "status", None) == "error" or exit_match is not None
         self.store.event(
             self.run_id,
             "tool.finished",
             {
                 "tool_call_id": str(run_id),
                 "output": str(content)[:16000],
+                "failed": failed,
+                "exit_code": int(exit_match.group(1)) if exit_match else None,
+                "elapsed_ms": round(
+                    (time.monotonic() - self.started.get(str(run_id), time.monotonic())) * 1000
+                ),
             },
         )
         self.changes()
@@ -68,6 +81,9 @@ class Trace(BaseCallbackHandler):
             {
                 "tool_call_id": str(run_id),
                 "error_type": type(error).__name__,
+                "elapsed_ms": round(
+                    (time.monotonic() - self.started.get(str(run_id), time.monotonic())) * 1000
+                ),
             },
         )
 
@@ -130,7 +146,14 @@ def run_agent(store, run_id, model, image):
                 for call in getattr(m, "tool_calls", [])
                 if call["id"] not in answered
             ]
-            user = {"role": "user", "content": run["text"]}
+            content = run["text"]
+            if run["attachment_ids"]:
+                content = [{"type": "text", "text": run["text"] or "请查看图片"}]
+                content.extend(
+                    store.image_block(identifier) for identifier in run["attachment_ids"]
+                )
+                store.event(run_id, "image.submitted", {"attachment_ids": run["attachment_ids"]})
+            user = {"role": "user", "content": content}
             store.message(
                 session["id"], run_id, {"type": "human", "data": {"content": run["text"]}}
             )
@@ -160,7 +183,7 @@ def main():
     store = AgentStore(args.root)
     settings = load_settings(args.config)
     try:
-        with model_session(settings) as model:
+        with general_model_session(settings, store.run(args.run_id)["reasoning_effort"]) as model:
             run_agent(store, args.run_id, model, settings.image)
     except Exception as error:
         store.event(args.run_id, "run.error", {"error_type": type(error).__name__})

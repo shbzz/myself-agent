@@ -32,7 +32,7 @@ are not yet available. Workspace import and choosing arbitrary host paths are no
 part of this increment.
 
 The default model remains the existing official DeepSeek Flash configuration.
-Custom providers/model controls, attachments/vision, user-configured context budgets,
+Custom providers/model controls, user-configured context budgets,
 settings, token-by-token rendering, MCP and competition team orchestration remain
 subsequent work in REBUILD_PLAN.md. Plain messages and tool events stream as complete
 records; this increment does not claim token-level streaming or full crash-resume.
@@ -54,7 +54,7 @@ that the requested software is correct. Tool output provides the validation evid
 
 ## Verification on home, 2026-10-29
 
-29 automated cases passed, including the previous 24 plus workspace/idempotency,
+31 automated cases passed, including the previous 24 plus workspace/idempotency,
 real Docker tool failure/repair/follow-up memory, container boundary/timeout,
 supervisor cancellation/restart, and API origin/body checks. A scripted offline
 model drives real Deep Agents/tools in the repair regression; it is not a measured
@@ -70,3 +70,31 @@ using ls/write_file/execute (4 tool calls). The platform independently reran the
 and 1,756 output tokens (16,296 total, including 10,880 cached input). This is one
 smoke-test task, not broad success-rate evidence. Generated workspace data and
 credentials are excluded from Git.
+
+
+## Conversation activity, images and reasoning
+
+The conversation itself displays compact expandable tool activities in execution
+order, with structured arguments/commands, actual output, failure state and elapsed
+time. Actual provider reasoning is collapsed by default. The visual direction uses
+a quiet dark DSH-like layout with original branding and activity components.
+
+Thinking can be off/low/high/max per run (default low). The adapter preserves
+reasoning_content in subsequent assistant/tool rounds. Image attachments persist
+per session, appear in user messages and use genuine multimodal image_url blocks.
+Upload, paste, drag/drop, preview and removal are supported. Up to four 6 MiB
+PNG/JPEG/GIF/WebP images per message; uploads have a separate 9 MiB gateway limit.
+The existing gateway credentials protect preview and attachment routes.
+
+API additions: POST /sessions/{id}/attachments with filename and data_base64;
+GET /attachments/{id}. Messages accept attachment_ids and reasoning_effort.
+An additive migration defaults existing runs to no attachments and thinking off.
+A consistent preview DB backup was taken first; the legacy DB remains separate.
+Attachment/checkpoint/model data stay outside Git. Do not delete data on rollback.
+
+A real vision+thinking task identified ORBIT-6427, a red rectangle and a blue circle,
+wrote visual_note.md, and verified it with Shell. The model returned reasoning and
+continued across tool turns. It recovered from a real read-before-write race; this
+is a smoke-test observation, not a measured repair rate. Browser QA confirmed
+35 layout states, inline command/output/time, default-collapsed reasoning, and
+image preview/upload/paste without page errors.

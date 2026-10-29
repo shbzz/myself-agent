@@ -111,6 +111,11 @@ def test_real_general_tools_failure_repair_and_persistent_followup(tmp_path, set
     events = store.events(session["id"])
     outputs = [e["payload"].get("output", "") for e in events if e["kind"] == "tool.finished"]
     assert any("AssertionError" in output for output in outputs)
+    assert any(
+        e["payload"].get("failed") and e["payload"].get("exit_code") == 1
+        for e in events
+        if e["kind"] == "tool.finished"
+    )
     assert any("verified" in output for output in outputs)
     assert any(e["kind"] == "file.changed" for e in events)
     assert "task" not in model.names

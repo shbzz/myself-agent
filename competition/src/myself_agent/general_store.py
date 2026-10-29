@@ -1,5 +1,6 @@
 """Independent, additive storage for arbitrary workspace sessions and durable events."""
 
+import base64
 import json
 import sqlite3
 import uuid
@@ -37,7 +38,65 @@ class AgentStore:
                   session_id TEXT NOT NULL, run_id TEXT NOT NULL, kind TEXT NOT NULL,
                   timestamp TEXT NOT NULL, payload TEXT NOT NULL);
                 CREATE INDEX IF NOT EXISTS events_session ON events(session_id, sequence);
+                CREATE TABLE IF NOT EXISTS attachments (
+                  id TEXT PRIMARY KEY, session_id TEXT NOT NULL, filename TEXT NOT NULL,
+                  mime_type TEXT NOT NULL, created TEXT NOT NULL);
             """)
+            columns = {row[1] for row in db.execute("PRAGMA table_info(runs)")}
+            if "attachment_ids" not in columns:
+                db.execute("ALTER TABLE runs ADD COLUMN attachment_ids TEXT NOT NULL DEFAULT '[]'")
+            if "reasoning_effort" not in columns:
+                db.execute(
+                    "ALTER TABLE runs ADD COLUMN reasoning_effort TEXT NOT NULL DEFAULT 'off'"
+                )
+
+    @staticmethod
+    def run_row(row):
+        return dict(row) | {"attachment_ids": json.loads(row["attachment_ids"])}
+
+    def attachment(self, identifier):
+        with self.connect() as db:
+            row = db.execute("SELECT * FROM attachments WHERE id=?", (identifier,)).fetchone()
+        if row is None:
+            raise KeyError(identifier)
+        return dict(row)
+
+    def attachment_path(self, identifier):
+        self.attachment(identifier)
+        return self.root / "attachments" / identifier
+
+    def create_attachment(self, session_id, filename, data):
+        self.session(session_id)
+        if not data or len(data) > 6 * 1024 * 1024:
+            raise ValueError("单张图片不能超过 6 MiB")
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            mime = "image/png"
+        elif data.startswith(b"\xff\xd8\xff"):
+            mime = "image/jpeg"
+        elif data[:6] in (b"GIF87a", b"GIF89a"):
+            mime = "image/gif"
+        elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+            mime = "image/webp"
+        else:
+            raise ValueError("仅支持 PNG、JPEG、GIF 或 WebP 图片")
+        identifier = uuid.uuid4().hex
+        directory = self.root / "attachments"
+        directory.mkdir(exist_ok=True, mode=0o700)
+        (directory / identifier).write_bytes(data)
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO attachments VALUES (?,?,?,?,?)",
+                (identifier, session_id, filename, mime, now()),
+            )
+        return self.attachment(identifier)
+
+    def image_block(self, identifier):
+        attachment = self.attachment(identifier)
+        encoded = base64.b64encode(self.attachment_path(identifier).read_bytes()).decode()
+        return {
+            "type": "image_url",
+            "image_url": {"url": f"data:{attachment['mime_type']};base64,{encoded}"},
+        }
 
     @contextmanager
     def connect(self):
@@ -104,23 +163,42 @@ class AgentStore:
             row = db.execute("SELECT * FROM runs WHERE id=?", (identifier,)).fetchone()
         if row is None:
             raise KeyError(identifier)
-        return dict(row)
+        return self.run_row(row)
 
-    def submit(self, session_id, request_id, text):
+    def submit(self, session_id, request_id, text, attachment_ids=(), reasoning_effort="low"):
         self.session(session_id)
+        for identifier in attachment_ids:
+            if self.attachment(identifier)["session_id"] != session_id:
+                raise BusyError("图片不属于当前会话")
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             previous = db.execute("SELECT * FROM runs WHERE request_id=?", (request_id,)).fetchone()
             if previous:
-                if previous["session_id"] != session_id or previous["text"] != text:
+                if (
+                    previous["session_id"] != session_id
+                    or previous["text"] != text
+                    or json.loads(previous["attachment_ids"]) != list(attachment_ids)
+                    or previous["reasoning_effort"] != reasoning_effort
+                ):
                     raise BusyError("同一请求编号不能用于不同内容")
-                return dict(previous), False
+                return self.run_row(previous), False
             if db.execute("SELECT 1 FROM runs WHERE status IN ('queued','running')").fetchone():
                 raise BusyError("已有任务正在运行，请等待或停止它")
             identifier = uuid.uuid4().hex
             db.execute(
-                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?)",
-                (identifier, session_id, request_id, text, "queued", now(), now(), None),
+                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?)",
+                (
+                    identifier,
+                    session_id,
+                    request_id,
+                    text,
+                    "queued",
+                    now(),
+                    now(),
+                    None,
+                    json.dumps(list(attachment_ids)),
+                    reasoning_effort,
+                ),
             )
             db.execute(
                 "UPDATE sessions SET title=? WHERE id=? AND title=?",
@@ -186,7 +264,7 @@ class AgentStore:
         self.session(session_id)
         with self.connect() as db:
             return [
-                dict(r)
+                self.run_row(r)
                 for r in db.execute(
                     "SELECT * FROM runs WHERE session_id=? ORDER BY created", (session_id,)
                 )

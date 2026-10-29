@@ -35,9 +35,11 @@ class AgentManager:
             self.store.event(run_id, "run.interrupted", {"reason": "ServerRestart"})
         self.pool = ThreadPoolExecutor(max_workers=1)
 
-    def submit(self, session_id, request_id, text):
+    def submit(self, session_id, request_id, text, attachment_ids=(), reasoning_effort="low"):
         with self.lock:
-            run, created = self.store.submit(session_id, request_id, text)
+            run, created = self.store.submit(
+                session_id, request_id, text, attachment_ids, reasoning_effort
+            )
             if created:
                 self.store.event(run["id"], "run.queued", {})
                 self.pool.submit(self.execute, run["id"])

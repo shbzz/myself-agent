@@ -2,9 +2,12 @@
 
 import argparse
 import asyncio
+import base64
+import binascii
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
@@ -34,7 +37,15 @@ class SessionInput(BaseModel):
 class MessageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_id: str = Field(pattern=r"^[a-f0-9]{32}$")
-    text: str = Field(min_length=1, max_length=16000)
+    text: str = Field(default="", max_length=16000)
+    attachment_ids: list[str] = Field(default_factory=list, max_length=4)
+    reasoning_effort: Literal["off", "low", "high", "max"] = "low"
+
+
+class ImageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    filename: str = Field(min_length=1, max_length=200)
+    data_base64: str = Field(max_length=8 * 1024 * 1024)
 
 
 def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
@@ -62,9 +73,10 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
             if request.headers.get("content-type", "").split(";")[0] != "application/json":
                 return JSONResponse({"detail": "需要 JSON 请求"}, status_code=415)
             body = bytearray()
+            limit = 9 * 1024 * 1024 if request.url.path.endswith("/attachments") else 65536
             async for chunk in request.stream():
                 body.extend(chunk)
-                if len(body) > 65536:
+                if len(body) > limit:
                     return JSONResponse({"detail": "请求过大"}, status_code=413)
             request._body = bytes(body)
         response = await call_next(request)
@@ -117,11 +129,27 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
             "runs": db.runs(session_id),
         }
 
+    @app.post("/next/api/sessions/{session_id}/attachments", status_code=201)
+    def upload(session_id: str, body: ImageInput, request: Request):
+        try:
+            data = base64.b64decode(body.data_base64, validate=True)
+            return store(request).create_attachment(session_id, body.filename, data)
+        except (ValueError, binascii.Error) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+
+    @app.get("/next/api/attachments/{attachment_id}")
+    def image(attachment_id: str, request: Request):
+        db = store(request)
+        item = db.attachment(attachment_id)
+        return FileResponse(db.attachment_path(attachment_id), media_type=item["mime_type"])
+
     @app.post("/next/api/sessions/{session_id}/messages", status_code=202)
     def submit(session_id: str, body: MessageInput, request: Request):
-        if not body.text.strip():
+        if not body.text.strip() and not body.attachment_ids:
             raise HTTPException(status_code=422, detail="请输入任务")
-        return request.app.state.manager.submit(session_id, body.request_id, body.text)
+        return request.app.state.manager.submit(
+            session_id, body.request_id, body.text, body.attachment_ids, body.reasoning_effort
+        )
 
     @app.post("/next/api/runs/{run_id}/stop")
     def stop(run_id: str, request: Request):
