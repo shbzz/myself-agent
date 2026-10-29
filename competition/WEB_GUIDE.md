@@ -4,7 +4,7 @@
 
 ## 使用
 
-直接打开 https://agent.foxbh.top 并使用专用账号登录。服务端账号文件位于 /home/dsh/.config/myself-agent/web-login.json，权限 600；当前 Windows 的登录说明由本机私有访问文件提供。
+直接打开 https://agent.foxbh.top:52117 并使用专用账号登录。服务端账号文件位于 /home/dsh/.config/myself-agent/web-login.json，权限 600；当前 Windows 的登录说明由本机私有访问文件提供。
 
 若需通过 SSH 维护，在 Windows PowerShell 保持此命令运行，再打开 http://127.0.0.1:8787：
 

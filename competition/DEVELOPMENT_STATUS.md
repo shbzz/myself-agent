@@ -31,3 +31,7 @@ user data outside version control.
 Baseline checks: Ruff lint/format, 24 pytest cases and both existing JavaScript
 syntax checks. The sidebar CSS fix still needs browser regression evidence.
 No real model call is needed for baseline tests.
+
+## General Agent preview increment
+
+See GENERAL_AGENT.md for the implemented generic session/tool loop, current limits, API and verification. The existing constrained app remains separate. Custom model/image/context settings and competition orchestration still require implementation.

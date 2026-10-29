@@ -3,10 +3,11 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
-from myself_agent.provider import invoke_role
-from myself_agent.schema import Plan
 from pydantic import Field
 from typing_extensions import TypedDict
+
+from myself_agent.provider import invoke_role
+from myself_agent.schema import Plan
 
 
 class FixedPlanModel(BaseChatModel):

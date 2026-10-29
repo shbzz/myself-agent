@@ -1,8 +1,9 @@
 import pytest
+from pydantic import ValidationError
+
 from myself_agent.config import load_settings
 from myself_agent.sandbox import docker_command
 from myself_agent.schema import Plan, SourceFile, merge_files
-from pydantic import ValidationError
 
 
 def test_artifact_allowlist_and_result_replacement():

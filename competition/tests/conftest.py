@@ -1,8 +1,9 @@
 import uuid
 
 import pytest
-from myself_agent.config import Settings
 from pydantic import SecretStr
+
+from myself_agent.config import Settings
 
 PARSER = """import csv
 import io
