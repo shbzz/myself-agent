@@ -11,6 +11,7 @@ from typing import Literal
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
@@ -18,6 +19,12 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from myself_agent.config import DEFAULT_CONFIG
 from myself_agent.general_manager import AgentManager
+from myself_agent.general_model import (
+    general_model_session,
+    model_base_settings,
+    provider_credential,
+)
+from myself_agent.general_settings import ConfigurationError, ModelInput, PolicyInput, ProviderInput
 from myself_agent.jobs import BusyError
 
 FRONTEND = Path(__file__).parents[2] / "frontend" / "dist"
@@ -39,7 +46,8 @@ class MessageInput(BaseModel):
     request_id: str = Field(pattern=r"^[a-f0-9]{32}$")
     text: str = Field(default="", max_length=16000)
     attachment_ids: list[str] = Field(default_factory=list, max_length=4)
-    reasoning_effort: Literal["off", "low", "high", "max"] = "low"
+    reasoning_effort: str = Field(default="low", pattern=r"^[a-zA-Z0-9_-]{1,24}$")
+    model_profile_id: str | None = Field(default=None, pattern=r"^[a-zA-Z0-9_-]{1,80}$")
 
 
 class ImageInput(BaseModel):
@@ -97,6 +105,18 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
     async def busy(request, error):
         return JSONResponse({"detail": str(error)}, status_code=409)
 
+    @app.exception_handler(ConfigurationError)
+    async def invalid_configuration(request, error):
+        return JSONResponse({"detail": str(error)}, status_code=422)
+
+    @app.exception_handler(RequestValidationError)
+    async def invalid_input(request, error):
+        # Validation errors must not echo a supplied credential value.
+        return JSONResponse(
+            {"detail": [{"loc": e["loc"], "msg": e["msg"]} for e in error.errors()]},
+            status_code=422,
+        )
+
     def store(request):
         return request.app.state.manager.store
 
@@ -107,6 +127,78 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
     @app.get("/next/api/workspaces")
     def workspaces(request: Request):
         return {"workspaces": store(request).workspaces()}
+
+    @app.get("/next/api/providers")
+    def providers(request: Request):
+        return {"providers": store(request).config.list("provider")}
+
+    @app.post("/next/api/providers", status_code=201)
+    def save_provider(body: ProviderInput, request: Request):
+        return store(request).config.save_provider(body)
+
+    @app.post("/next/api/providers/{provider_id}/test")
+    def test_provider(provider_id: str, request: Request):
+        db = store(request)
+        provider = db.config.get("provider", provider_id)
+        settings = model_base_settings(config_path, provider)
+        snapshot = db.config.resolve()
+        snapshot["provider"] = provider
+        snapshot["profile"] = dict(snapshot["profile"], reasoning_parameter="none")
+        try:
+            key = provider_credential(db, provider, settings)
+            with general_model_session(settings, "off", snapshot, key) as model:
+                response = model.root_client.models.list()
+                return {
+                    "connected": True,
+                    "models": [m.id for m in response.data[:100]],
+                    "capabilities": "声明能力需通过实际运行验证",
+                }
+        except Exception as error:
+            raise HTTPException(
+                status_code=502, detail=f"连接失败（{type(error).__name__}），请检查地址和密钥"
+            ) from None
+
+    @app.get("/next/api/models")
+    def models(request: Request):
+        return {"models": store(request).config.list("model")}
+
+    @app.post("/next/api/models", status_code=201)
+    def save_model(body: ModelInput, request: Request):
+        return store(request).config.save_model(body)
+
+    @app.get("/next/api/configuration")
+    def configuration(
+        request: Request, workspace_id: str | None = None, session_id: str | None = None
+    ):
+        result = store(request).config.resolve(workspace_id, session_id)
+        result["provider"] = store(request).config.public(result["provider"])
+        return result
+
+    @app.post("/next/api/settings/{scope}/{identifier}")
+    def save_settings(
+        scope: Literal["global", "workspace", "session"],
+        identifier: str,
+        body: PolicyInput,
+        request: Request,
+    ):
+        key = "global" if scope == "global" else scope + ":" + identifier
+        return store(request).config.save_policy(key, body)
+
+    @app.get("/next/api/sessions/{session_id}/context")
+    def context_records(session_id: str, request: Request):
+        return {"records": store(request).config.records(session_id)}
+
+    @app.post("/next/api/sessions/{session_id}/compact", status_code=202)
+    def compact(session_id: str, body: MessageInput, request: Request):
+        return request.app.state.manager.submit(
+            session_id,
+            body.request_id,
+            "手动压缩上下文",
+            [],
+            "off",
+            body.model_profile_id,
+            "compact",
+        )
 
     @app.post("/next/api/workspaces", status_code=201)
     def create_workspace(body: WorkspaceInput, request: Request):
@@ -148,7 +240,12 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
         if not body.text.strip() and not body.attachment_ids:
             raise HTTPException(status_code=422, detail="请输入任务")
         return request.app.state.manager.submit(
-            session_id, body.request_id, body.text, body.attachment_ids, body.reasoning_effort
+            session_id,
+            body.request_id,
+            body.text,
+            body.attachment_ids,
+            body.reasoning_effort,
+            body.model_profile_id,
         )
 
     @app.post("/next/api/runs/{run_id}/stop")

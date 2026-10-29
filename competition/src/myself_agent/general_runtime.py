@@ -13,9 +13,15 @@ from langchain_core.callbacks import BaseCallbackHandler, UsageMetadataCallbackH
 from langchain_core.messages import ToolMessage, message_to_dict
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from myself_agent.config import DEFAULT_CONFIG, load_settings
-from myself_agent.general_model import general_model_session
+from myself_agent.config import DEFAULT_CONFIG
+from myself_agent.general_context import CallBudget, ContextMiddleware
+from myself_agent.general_model import (
+    general_model_session,
+    model_base_settings,
+    provider_credential,
+)
 from myself_agent.general_sandbox import WorkspaceSandbox
+from myself_agent.general_settings import ConfigurationError
 from myself_agent.general_store import AgentStore
 from myself_agent.provider import platform_owned_delegation
 
@@ -106,11 +112,23 @@ class Trace(BaseCallbackHandler):
 
 def run_agent(store, run_id, model, image):
     run = store.run(run_id)
+    snapshot_config = store.run_configuration(run_id)
+    policy = snapshot_config["policy"]
     session = store.session(run["session_id"])
     directory = store.directory(session["workspace_id"])
     store.event(run_id, "run.started", {"model": getattr(model, "model_name", "configured")})
     trace, usage = Trace(store, run_id, directory), UsageMetadataCallbackHandler()
-    with WorkspaceSandbox(directory, image, run_id) as backend:
+    budget = CallBudget(policy["max_model_calls"])
+    context = ContextMiddleware(
+        model,
+        snapshot_config,
+        store,
+        run_id,
+        usage,
+        force=run["action"] == "compact",
+        budget=budget,
+    )
+    with WorkspaceSandbox(directory, image, run_id, policy["tool_timeout_seconds"]) as backend:
         with SqliteSaver.from_conn_string(str(store.root / "checkpoints.sqlite")) as saver:
             agent = create_deep_agent(
                 model=model,
@@ -119,7 +137,10 @@ def run_agent(store, run_id, model, image):
                 subagents=[],
                 middleware=[
                     platform_owned_delegation,
-                    ModelCallLimitMiddleware(run_limit=24, exit_behavior="error"),
+                    context,
+                    ModelCallLimitMiddleware(
+                        run_limit=policy["max_model_calls"], exit_behavior="error"
+                    ),
                 ],
                 system_prompt=(
                     "你是通用工作区 Agent。按用户自由提出的任务使用真实工具完成工作。"
@@ -133,9 +154,19 @@ def run_agent(store, run_id, model, image):
             config = {
                 "configurable": {"thread_id": session["id"]},
                 "recursion_limit": 100,
-                "callbacks": [trace, usage],
+                "callbacks": [trace, usage, budget],
             }
             previous = agent.get_state(config).values.get("messages", [])
+            if run["action"] == "compact":
+                result = context.before_model({"messages": previous}, None) if previous else None
+                if result:
+                    agent.update_state(config, result)
+                else:
+                    store.event(
+                        run_id, "context.unchanged", {"reason": "当前可压缩历史不足，保留原文"}
+                    )
+                store.event(run_id, "run.finished", {"usage": usage.usage_metadata})
+                return
             answered = {getattr(m, "tool_call_id", None) for m in previous}
             recovery = [
                 ToolMessage(
@@ -153,7 +184,11 @@ def run_agent(store, run_id, model, image):
                     store.image_block(identifier) for identifier in run["attachment_ids"]
                 )
                 store.event(run_id, "image.submitted", {"attachment_ids": run["attachment_ids"]})
-            user = {"role": "user", "content": content}
+            user = {
+                "role": "user",
+                "content": content,
+                "additional_kwargs": {"attachment_ids": run["attachment_ids"]},
+            }
             store.message(
                 session["id"], run_id, {"type": "human", "data": {"content": run["text"]}}
             )
@@ -181,12 +216,25 @@ def main():
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     args = parser.parse_args()
     store = AgentStore(args.root)
-    settings = load_settings(args.config)
     try:
-        with general_model_session(settings, store.run(args.run_id)["reasoning_effort"]) as model:
+        configuration = store.run_configuration(args.run_id)
+        settings = model_base_settings(args.config, configuration["provider"])
+        credential = provider_credential(store, configuration["provider"], settings)
+        with general_model_session(
+            settings, store.run(args.run_id)["reasoning_effort"], configuration, credential
+        ) as model:
             run_agent(store, args.run_id, model, settings.image)
     except Exception as error:
-        store.event(args.run_id, "run.error", {"error_type": type(error).__name__})
+        store.event(
+            args.run_id,
+            "run.error",
+            {
+                "error_type": type(error).__name__,
+                "detail": str(error)
+                if isinstance(error, ConfigurationError)
+                else "模型或工具执行失败，请检查配置和执行记录",
+            },
+        )
         raise SystemExit(1) from None
 
 
