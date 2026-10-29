@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+while read -r local_ref local_sha remote_ref remote_sha; do
+  if [[ "$remote_ref" == "refs/heads/main" ]]; then
+    printf 'Direct pushes to main are blocked; push a codex/* branch and open a pull request.\n' >&2
+    exit 1
+  fi
+done
+
+exec "$ROOT/competition/scripts/check-home.sh"

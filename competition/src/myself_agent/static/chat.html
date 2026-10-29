@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#171717">
+  <title>Myself Agent · 对话与任务编排</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/chat.css?v=3.2">
+  <script src="/assets/chat.js?v=3.1" defer></script>
+</head>
+<body>
+  <svg class="svg-definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chat" viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9H13a8.5 8.5 0 0 1 8 8v.5z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 4.5 4.5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5a1 1 0 0 1 1-1h6l2 3h8a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m8 10 4 4 4-4"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="3"/><circle cx="15" cy="17" r="3"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 7-5 5 5 5m8-10 5 5-5 5m-3-14-2 18"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4h16v-4"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M2 12h5l3-8 4 16 3-8h5"/></symbol>
+  </defs></svg>
+
+  <div id="app" class="app tracker-open is-empty">
+    <button id="navigation-backdrop" class="mobile-backdrop" aria-label="关闭会话列表" hidden></button>
+    <aside id="conversation-sidebar" class="conversation-sidebar" aria-label="会话列表">
+      <div class="sidebar-brand"><a href="/" class="brand"><span class="brand-logo">m<span>·</span></span><span>myself <b>agent</b></span></a><button id="collapse-navigation" class="icon-button" title="收起会话列表" aria-label="收起会话列表"><svg><use href="#i-left"/></svg></button></div>
+      <button id="new-conversation" class="new-conversation"><svg><use href="#i-plus"/></svg>新会话</button>
+      <div class="workspace-label"><span>工作区</span><span class="workspace-tag">home</span></div>
+      <label class="conversation-search"><svg><use href="#i-search"/></svg><input id="conversation-search" type="search" placeholder="搜索会话" aria-label="搜索会话"></label>
+      <div class="workspace-folder"><svg><use href="#i-folder"/></svg><strong>开发与自动测试</strong><span id="conversation-count">0</span></div>
+      <nav id="conversation-list" class="conversation-list" aria-label="历史对话"><p class="sidebar-empty">正在连接工作空间…</p></nav>
+      <div class="sidebar-footer"><div class="connection-line"><span id="connection-dot" class="connection-dot"></span><span id="connection-label">正在连接 home</span></div><div class="sidebar-footer-note"><span>Agent 编排创新应用</span><span>0.3</span></div></div>
+    </aside>
+
+    <section class="chat-panel" aria-label="对话工作区">
+      <header class="chat-header"><div class="chat-heading"><button id="expand-navigation" class="icon-button" title="展开会话列表" aria-label="展开会话列表"><svg><use href="#i-left"/></svg></button><svg class="header-folder"><use href="#i-folder"/></svg><div><h1 id="conversation-title">新会话</h1><span id="conversation-subtitle">home 工作空间</span></div></div><button id="toggle-tracker" class="tracker-toggle" aria-controls="task-tracker" aria-expanded="true"><svg><use href="#i-panel"/></svg><span>任务追踪</span><i id="tracker-live-dot" hidden></i></button></header>
+      <div id="connection-error" class="connection-error" role="status" hidden><span id="connection-message">暂时无法连接服务器。</span><button id="retry-connection">重新连接</button></div>
+      <div id="chat-scroll" class="chat-scroll">
+        <div id="welcome" class="welcome"><div class="welcome-logo">m<span>·</span></div><h2>一起，把想法变成代码。</h2><p>在这里提出需求，右侧查看任务进展与每一次修改。</p><div id="suggestions" class="suggestions"><button data-scenario="csv-orders">解析与汇总 CSV 订单</button><button data-scenario="text-insights">构建文本统计工具</button><button data-scenario="order-report">生成订单分析报告</button></div></div>
+        <div id="messages" class="messages" aria-label="对话内容" hidden></div>
+      </div>
+      <div class="composer-zone"><div class="composer-context"><span class="workspace-context"><svg><use href="#i-folder"/></svg>home</span><span class="context-separator"></span><label class="scenario-control"><select id="scenario-select" aria-label="当前开发场景"><option>加载场景…</option></select><svg><use href="#i-chevron"/></svg></label><button id="open-settings" class="settings-button" aria-expanded="false" aria-controls="run-settings"><svg><use href="#i-settings"/></svg><span id="settings-summary">并行 2 · 修复 2</span></button></div>
+        <div id="run-settings" class="run-settings" hidden><div class="settings-heading"><strong>运行设置</strong><button id="close-settings" class="icon-button" aria-label="关闭运行设置"><svg><use href="#i-close"/></svg></button></div><label for="concurrency">开发并发数</label><select id="concurrency"><option value="2">2 · 独立任务允许并行</option><option value="1">1 · 按顺序执行</option></select><label for="max-repairs">最大自动修复轮数</label><select id="max-repairs"><option value="2">2 轮</option><option value="0">0 · 只执行首次验收</option><option value="1">1 轮</option><option value="3">3 轮</option></select><p>每条需求对应一次独立验收；继续修改会沿用上一轮代码。</p></div>
+        <form id="chat-form" class="composer"><label class="visually-hidden" for="brief">描述开发需求或需要修改的地方</label><textarea id="brief" maxlength="1500" rows="3" placeholder="描述你想构建的内容，或继续说明需要修改的地方…"></textarea><div class="composer-toolbar"><span id="composer-state" class="composer-state"><i></i>就绪</span><span id="brief-count" class="brief-count">0 / 1500</span><span class="model-label">DeepSeek Flash</span><button id="send-message" class="send-button" type="submit" aria-label="发送消息" title="发送消息" disabled><svg><use href="#i-arrow"/></svg></button></div></form>
+        <div class="composer-foot"><span id="scope-note">当前场景的接口与验收标准保持固定</span><span>Enter 发送 · Shift+Enter 换行</span></div><p id="form-message" class="form-message" role="status" aria-live="polite"></p><div class="usage-note">发送后调用 DeepSeek 官方 API，产生实际模型用量。</div>
+      </div>
+    </section>
+
+    <button id="tracker-backdrop" class="mobile-backdrop tracker-backdrop" aria-label="收起任务追踪" hidden></button>
+    <aside id="task-tracker" class="task-tracker" aria-label="任务追踪">
+      <header class="tracker-header"><div><svg><use href="#i-activity"/></svg><strong>任务追踪</strong><span id="tracker-status" class="status-label idle">未开始</span></div><button id="close-tracker" class="icon-button" aria-label="收起任务追踪" title="收起任务追踪"><svg><use href="#i-panel"/></svg></button></header>
+      <div class="tracker-run"><label for="tracked-turn">查看任务</label><select id="tracked-turn"><option>新任务预览</option></select></div>
+      <div class="tracker-tabs" role="tablist" aria-label="追踪内容"><button id="tab-progress" class="tracker-tab active" data-tab="progress" role="tab" aria-selected="true" aria-controls="pane-progress">进度</button><button id="tab-changes" class="tracker-tab" data-tab="changes" role="tab" aria-selected="false" aria-controls="pane-changes">修改<span id="change-count">0</span></button><button id="tab-tests" class="tracker-tab" data-tab="tests" role="tab" aria-selected="false" aria-controls="pane-tests">验证</button></div>
+      <div class="tracker-content">
+        <section id="pane-progress" class="tracker-pane" role="tabpanel" aria-labelledby="tab-progress"><div class="progress-overview"><div class="progress-ring"><svg viewBox="0 0 90 90" aria-hidden="true"><circle class="ring-base" cx="45" cy="45" r="37"/><circle id="progress-arc" class="ring-value" cx="45" cy="45" r="37" stroke-dasharray="232.48" stroke-dashoffset="232.48"/></svg><strong id="progress-percent">0<span>%</span></strong></div><div><h2 id="progress-stage">等待开始</h2><p id="progress-caption">发送需求后开始规划任务</p><small id="progress-completion">0 个阶段已完成</small></div></div><div class="section-caption"><span>执行阶段</span><span id="task-count">0 个开发任务</span></div><div id="task-checklist" class="task-checklist"></div><details id="dependencies-section" class="tracker-details" open><summary>依赖关系<span>任务就绪后派发</span></summary><div id="dag" class="dag"><svg id="dag-edges" aria-hidden="true"></svg><div id="dag-levels" class="dag-levels"></div></div></details><details class="tracker-details"><summary>执行记录<span id="event-count">0 条</span></summary><div id="event-list" class="event-list"></div></details></section>
+        <section id="pane-changes" class="tracker-pane" role="tabpanel" aria-labelledby="tab-changes" hidden><div class="section-caption"><span>文件与版本</span><span id="file-summary">等待生成代码</span></div><div id="file-list" class="file-list"></div><div id="file-viewer" class="file-viewer" hidden><div class="file-viewer-heading"><strong id="selected-file"></strong><button id="copy-source" class="icon-button" aria-label="复制当前源文件" title="复制源文件"><svg><use href="#i-copy"/></svg></button></div><div class="version-controls"><select id="file-version" aria-label="文件版本"></select><div class="code-mode"><button id="mode-diff" class="active">差异</button><button id="mode-source">源码</button></div></div><p id="comparison-label" class="comparison-label"></p><pre id="code-view" class="code-view" aria-label="代码变更"></pre></div><div id="changes-empty" class="tracker-empty"><svg><use href="#i-code"/></svg><strong>修改会在这里留下痕迹</strong><p>文件生成后，实时查看新增、删除的代码行；支持切换修复版本。</p></div></section>
+        <section id="pane-tests" class="tracker-pane" role="tabpanel" aria-labelledby="tab-tests" hidden><div id="test-rounds" class="test-rounds"></div><div id="tests-empty" class="tracker-empty"><svg><use href="#i-check"/></svg><strong>等待独立验收</strong><p>代码完成后执行固定测试，失败反馈和后续修复会按轮次保留。</p></div></section>
+      </div>
+      <footer class="tracker-footer"><div><span id="run-duration">— 秒</span><span class="footer-dot">·</span><span id="token-usage">— tokens</span></div><a id="download-result" hidden title="下载本轮代码、测试报告与运行证据"><svg><use href="#i-download"/></svg><span>下载结果</span></a></footer>
+    </aside>
+  </div>
+</body>
+</html>

@@ -46,8 +46,10 @@ jobs:
               - 'libs/checkpoint-conformance/**'
               - 'libs/prebuilt/**'
             deps:
-              - '**/pyproject.toml'
-              - '**/uv.lock'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'libs/**/pyproject.toml'
+              - 'libs/**/uv.lock'
             sdk_py:
               - 'libs/sdk-py/**'
               # The integration suite runs the local langgraph core inside the

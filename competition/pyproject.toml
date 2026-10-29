@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "myself-agent-competition"
+version = "0.3.0"
+description = "DeepSeek, Deep Agents and LangGraph with isolated acceptance tests"
+requires-python = ">=3.11"
+dependencies = [
+  "langgraph==1.2.18",
+  "langgraph-checkpoint-sqlite==3.1.2",
+  "deepagents==0.7.32",
+  "langchain-deepseek==1.1.1",
+  "fastapi==0.162.0",
+  "uvicorn==0.54.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.15"]
+
+[project.scripts]
+myself-agent = "myself_agent.cli:main"
+myself-agent-web = "myself_agent.web:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+myself_agent = ["acceptance/*.py", "static/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+markers = ["docker: requires the configured Docker engine and pinned image"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
