@@ -56,6 +56,9 @@ class AgentStore:
             if "action" not in columns:
                 db.execute("ALTER TABLE runs ADD COLUMN action TEXT NOT NULL DEFAULT 'message'")
         self.config = ConfigurationStore(self)
+        from myself_agent.orchestration_store import OrchestrationStore
+
+        self.orchestration = OrchestrationStore(self)
 
     @staticmethod
     def run_row(row):
@@ -210,16 +213,25 @@ class AgentStore:
         reasoning_effort="low",
         model_profile_id=None,
         action="message",
+        orchestration=None,
     ):
         self.session(session_id)
-        configuration = self.config.resolve(
-            session_id=session_id,
-            override=({"model_profile_id": model_profile_id} if model_profile_id else None),
+        configuration = (
+            orchestration["configuration"]
+            if orchestration
+            else self.config.resolve(
+                session_id=session_id,
+                override=({"model_profile_id": model_profile_id} if model_profile_id else None),
+            )
         )
+        if (action == "orchestrate") != (orchestration is not None):
+            raise ConfigurationError("An orchestration run requires a frozen definition")
         profile = configuration["profile"]
-        if reasoning_effort not in profile["reasoning_levels"]:
+        if orchestration and attachment_ids:
+            raise ConfigurationError("本增量编排只接受文本任务，不隐式丢弃图片")
+        if not orchestration and reasoning_effort not in profile["reasoning_levels"]:
             raise ConfigurationError("所选模型未声明此思考等级，请调整等级或模型能力设置")
-        if not profile["images"]:
+        if not orchestration and not profile["images"]:
             with self.connect() as db:
                 images = db.execute(
                     "SELECT 1 FROM runs WHERE session_id=? AND attachment_ids!='[]'", (session_id,)
@@ -246,6 +258,15 @@ class AgentStore:
                     )
                 ):
                     raise BusyError("同一请求编号不能用于不同内容")
+                if orchestration:
+                    frozen = db.execute(
+                        "SELECT snapshot FROM orchestrations WHERE run_id=?", (previous["id"],)
+                    ).fetchone()
+                    if not frozen or any(
+                        json.loads(frozen[0])[k]["id"] != orchestration[k]["id"]
+                        for k in ("team", "workflow")
+                    ):
+                        raise BusyError("同一请求编号不能用于不同编排内容")
                 return self.run_row(previous), False
             if db.execute("SELECT 1 FROM runs WHERE status IN ('queued','running')").fetchone():
                 raise BusyError("已有任务正在运行，请等待或停止它")
@@ -267,6 +288,11 @@ class AgentStore:
                     action,
                 ),
             )
+            if orchestration:
+                db.execute(
+                    "INSERT INTO orchestrations(run_id,snapshot) VALUES (?,?)",
+                    (identifier, json.dumps(orchestration)),
+                )
             db.execute(
                 "UPDATE sessions SET title=? WHERE id=? AND title=?",
                 (text[:48], session_id, "新会话"),

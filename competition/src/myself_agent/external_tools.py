@@ -9,12 +9,18 @@ from myself_agent.mcp_tools import MCPAccess
 from myself_agent.web_tools import WebAccess, browse_page
 
 
-def external_tools(store, run_id, snapshot, proxy="http://127.0.0.1:7890"):
+def external_tools(
+    store, run_id, snapshot, proxy="http://127.0.0.1:7890", *, web_access=None, mcp_access=None
+):
     policy = snapshot["policy"]
     timeout = policy["tool_timeout_seconds"]
-    web = WebAccess(policy, proxy)
-    mcp = MCPAccess(
-        store, snapshot.get("mcp_servers", []), proxy, timeout, policy.get("max_mcp_calls", 20)
+    web = web_access if web_access is not None else WebAccess(policy, proxy)
+    mcp = (
+        mcp_access
+        if mcp_access is not None
+        else MCPAccess(
+            store, snapshot.get("mcp_servers", []), proxy, timeout, policy.get("max_mcp_calls", 20)
+        )
     )
     tools = []
 

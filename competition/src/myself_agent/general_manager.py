@@ -2,6 +2,7 @@
 
 import fcntl
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -32,6 +33,7 @@ class AgentManager:
         for run_id in active:
             self.cleanup(run_id)
             self.store.status(run_id, "interrupted", "ServerRestart")
+            self.store.orchestration.interrupt(run_id, "interrupted", "ServerRestart")
             self.store.event(run_id, "run.interrupted", {"reason": "ServerRestart"})
         self.pool = ThreadPoolExecutor(max_workers=1)
 
@@ -60,33 +62,61 @@ class AgentManager:
                 self.pool.submit(self.execute, run["id"])
         return run
 
+    def submit_workflow(
+        self, session_id, request_id, text, team_id, workflow_id, reasoning_effort="off"
+    ):
+        with self.lock:
+            snapshot = self.store.orchestration.submission(
+                session_id, request_id, text, team_id, workflow_id, reasoning_effort
+            )
+            run, created = self.store.submit(
+                session_id,
+                request_id,
+                text,
+                reasoning_effort=reasoning_effort,
+                action="orchestrate",
+                orchestration=snapshot,
+            )
+            if created:
+                self.store.event(run["id"], "run.queued", {"action": "orchestrate"})
+                self.pool.submit(self.execute, run["id"])
+        return run
+
     def execute(self, run_id):
         with self.lock:
             if self.store.run(run_id)["status"] != "queued":
                 return
             self.store.status(run_id, "running")
-            process = subprocess.Popen(
-                [
-                    sys.executable,
-                    "-m",
-                    "myself_agent.general_runtime",
-                    "--root",
-                    str(self.store.root),
-                    "--run-id",
-                    run_id,
-                    "--config",
-                    str(self.config_path),
-                ],
-                env={
-                    **os.environ,
-                    "PYTHONPATH": str(Path(__file__).parent.parent),
-                    "LANGSMITH_TRACING": "false",
-                    "LANGCHAIN_TRACING_V2": "false",
-                },
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
+            try:
+                process = subprocess.Popen(
+                    [
+                        sys.executable,
+                        "-m",
+                        "myself_agent.orchestration_runtime"
+                        if self.store.run(run_id)["action"] == "orchestrate"
+                        else "myself_agent.general_runtime",
+                        "--root",
+                        str(self.store.root),
+                        "--run-id",
+                        run_id,
+                        "--config",
+                        str(self.config_path),
+                    ],
+                    env={
+                        **os.environ,
+                        "PYTHONPATH": str(Path(__file__).parent.parent),
+                        "LANGSMITH_TRACING": "false",
+                        "LANGCHAIN_TRACING_V2": "false",
+                    },
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+            except Exception as error:
+                self.store.status(run_id, "failed", type(error).__name__)
+                self.store.orchestration.interrupt(run_id, "failed", type(error).__name__)
+                self.store.event(run_id, "run.error", {"error_type": type(error).__name__})
+                return
             self.processes[run_id] = process
         try:
             code = process.wait(
@@ -113,11 +143,36 @@ class AgentManager:
             check=False,
         )
 
+        listing = subprocess.run(
+            [
+                "sudo",
+                "-n",
+                "docker",
+                "ps",
+                "-aq",
+                "--filter",
+                "label=myself-agent.parent=" + run_id,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+        for identifier in listing.stdout.splitlines():
+            if re.fullmatch(r"[a-f0-9]{12,64}", identifier):
+                subprocess.run(
+                    ["sudo", "-n", "docker", "rm", "-f", identifier],
+                    capture_output=True,
+                    timeout=15,
+                    check=False,
+                )
+
     def cancel(self, run_id, reason="UserStopped"):
         with self.lock:
             if self.store.run(run_id)["status"] not in ("running", "queued"):
                 return self.store.run(run_id)
             self.store.status(run_id, "cancelled", reason)
+            self.store.orchestration.interrupt(run_id, "cancelled", reason)
             process = self.processes.get(run_id)
             if process is not None and process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)
