@@ -120,7 +120,7 @@ request_id 重试返回原运行/原快照，不重复派发；同一编号不�
 
 ## 8. 验证证据
 
-必需检查：home 的 `competition/scripts/check-home.sh` 已通过：161 项 pytest、Ruff/格式、旧 JS 语法和 TypeScript/Vite；保留既有 LangGraph durability 警告。前端源码无差异，构建资源哈希保持不变。
+必需检查：home 的 `competition/scripts/check-home.sh` 已通过：162 项 pytest、Ruff/格式、旧 JS 语法和 TypeScript/Vite；保留既有 LangGraph durability 警告。前端源码无差异，构建资源哈希保持不变。
 确定性测试覆盖顺序/真正并行、写互斥、两种条件分支、嵌套、依赖覆盖、优先级/动态选择、有界局部修复、失败与预算、快照/幂等/事务、取消/重启和真实 Docker。
 测试中的脚本模型是明确的离线夹具，不充当自主模型成功的证据。
 

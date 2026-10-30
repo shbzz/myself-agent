@@ -380,3 +380,32 @@ def test_role_models_not_unused_default_determine_supported_effort(tmp_path):
     )
     assert store.run(run["id"])["reasoning_effort"] == "high"
     assert all(a["configuration"]["profile"]["id"] == "deepseek-flash" for a in snapshot["agents"])
+
+
+def test_role_policy_provenance_stays_frozen_during_concurrent_edit(tmp_path, monkeypatch):
+    store, run, _, session = new_workflow(tmp_path, [work(), review()])
+    store.status(run["id"], "succeeded")
+    original = store.config.resolve
+    edited = False
+
+    def resolve(*args, **kwargs):
+        nonlocal edited
+        if kwargs.get("override") and not edited:
+            edited = True
+            policy = store.config.get("policy", "global")
+            policy["max_web_requests"] = 1
+            store.config.write("policy", "global", policy)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(store.config, "resolve", resolve)
+    snapshot = store.orchestration.prepare(session["id"], "team", "flow", "off")
+    assert edited
+    assert store.config.get("policy", "global")["max_web_requests"] == 1
+    frozen = snapshot["configuration"]
+    for member in snapshot["agents"]:
+        assert (
+            member["configuration"]["policy"]["max_web_requests"]
+            == frozen["policy"]["max_web_requests"]
+            == 20
+        )
+        assert member["configuration"]["revisions"] == frozen["revisions"]

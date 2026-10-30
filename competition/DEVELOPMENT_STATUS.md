@@ -85,7 +85,7 @@ artifact fingerprints and dependency-scoped feedback repair. All activated produ
 outputs must be covered by successful verification. See ORCHESTRATION.md and the
 validated examples/orchestration.json. No frontend source changes are included.
 
-Required home checks pass: 161 pytest cases, Ruff/format, static JS and TypeScript/Vite.
+Required home checks pass: 162 pytest cases, Ruff/format, static JS and TypeScript/Vite.
 The pre-existing LangGraph durability warning remains. Frontend source and asset hashes
 are unchanged.
 

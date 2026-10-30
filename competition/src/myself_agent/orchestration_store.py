@@ -59,6 +59,8 @@ class OrchestrationStore:
                 override=config["policy"]
                 | {"model_profile_id": definition["model_profile_id"] or config["profile"]["id"]},
             )
+            # Policy values are frozen from the parent; provenance must match.
+            model_config["revisions"] = dict(config["revisions"])
             if effort not in model_config["profile"]["reasoning_levels"]:
                 raise ConfigurationError("A team model does not support this reasoning effort")
             if not model_config["profile"]["tools"]:
