@@ -35,3 +35,19 @@ No real model call is needed for baseline tests.
 ## General Agent preview increment
 
 See GENERAL_AGENT.md for the implemented generic session/tool loop, current limits, API and verification. The existing constrained app remains separate. Custom model/image/context settings and competition orchestration still require implementation.
+
+
+## Workspace import and file delivery - 2026-10-30
+
+Model/context settings have landed in main (#3). The general workbench now adds ZIP
+project import into a new workspace, directory browsing, UTF-8 file preview,
+individual downloads and workspace ZIP export. See WORKSPACE_FILES.md for API,
+bounds and import/export behavior. Existing sessions and data remain in place.
+No data schema migration is required for this increment.
+
+Validation includes 57 pytest cases, Ruff, TypeScript/Vite and real Docker
+execution on an imported project. Browser evidence is kept outside the repository.
+This increment does not call a paid model. Continue with external research/browser/
+MCP tools, then Agent registration, configurable workflows, dynamic scheduling,
+independent verification/repair and competition evidence. The owner's frontend
+visual redesign remains deferred until these functions are complete.

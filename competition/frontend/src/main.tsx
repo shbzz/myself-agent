@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import './style.css';
 import ReactMarkdown from 'react-markdown';
 import {SettingsPanel} from './SettingsPanel';
+import {WorkspacePanel} from './WorkspacePanel';
 
 type Workspace = {id: string; name: string};
 type Session = {id: string; title: string};
@@ -66,6 +67,7 @@ function App() {
   const [attachments, setAttachments] = useState<Record<string, Attachment[]>>({});
   const [thinking, setThinking] = useState('low');
   const [showSettings, setShowSettings] = useState(false);
+  const [showFiles, setShowFiles] = useState(false);
   const [models, setModels] = useState<any[]>([]);
   const [configuration, setConfiguration] = useState<any>(null);
   const [configEpoch, setConfigEpoch] = useState(0);
@@ -229,6 +231,7 @@ function App() {
     {nav && <aside className="navigation">
       <header><strong className="brand">m<span>·</span> <small>myself agent</small></strong><button onClick={() => setNav(false)} aria-label="收起左侧栏">◧</button></header>
       <div className="workspace-picker"><select disabled={sending || uploading} aria-label="选择工作区" value={workspace} onChange={e => {localStorage.setItem('agent-workspace', e.target.value); setWorkspace(e.target.value);}}><option value="" disabled>选择工作区</option>{workspaces.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select><button disabled={sending || uploading} onClick={createWorkspace} aria-label="创建工作区">＋</button></div>
+      <button className="workspace-files-button" onClick={() => setShowFiles(true)}>▤ 工作区文件 / 导入项目</button>
       <button className="new-session" disabled={!workspace || sending} onClick={newSession}>＋ 新会话</button>
       <input className="search" aria-label="搜索会话" placeholder="搜索会话" value={search} onChange={e => setSearch(e.target.value)}/>
       <button className="group" onClick={() => setGroupOpen(!groupOpen)} aria-expanded={groupOpen}>{groupOpen ? '⌄' : '›'} 工作区会话 <span>{sessions.length}</span></button>
@@ -237,7 +240,7 @@ function App() {
       <div className="resizer right" role="separator" tabIndex={0} aria-label="调整左侧栏宽度" aria-orientation="vertical" onPointerDown={e => resize(0, e)} onKeyDown={e => {if (['ArrowLeft','ArrowRight'].includes(e.key)) setWidths([Math.max(220, Math.min(550, widths[0] + (e.key === 'ArrowRight' ? 20 : -20))), widths[1]]);}}/>
     </aside>}
     <main className="chat">
-      <header><div>{!nav && <button onClick={() => setNav(true)} aria-label="展开左侧栏">◨</button>}<span>{sessions.find(s => s.id === session)?.title || '新任务'}<small>{workspaces.find(w => w.id === workspace)?.name || '创建一个工作区开始'}</small></span></div><button onClick={() => setTracker(!tracker)} aria-expanded={tracker}>◫ 任务追踪</button></header>
+      <header><div>{!nav && <button onClick={() => setNav(true)} aria-label="展开左侧栏">◨</button>}<span>{sessions.find(s => s.id === session)?.title || '新任务'}<small>{workspaces.find(w => w.id === workspace)?.name || '创建一个工作区开始'}</small></span></div><div><button onClick={() => setShowFiles(true)} aria-label="打开工作区文件">▤ 文件</button><button onClick={() => setTracker(!tracker)} aria-expanded={tracker}>◫ 任务追踪</button></div></header>
       {error && <div role="alert" className="error">{error}<button onClick={() => setError('')}>关闭</button></div>}
       <section className="messages" aria-label="会话消息">
         {!runs.length && <div className="welcome"><div className="mark">m·</div><h1>一起，探索想法的下一步。</h1><p>提出任务，添加图片，在这里看见每一步执行。</p><button onClick={() => setDraft('创建一个待办事项命令行工具，使用 JSON 保存数据，支持添加、完成和列表，编写 unittest 并运行测试。')}>创建工具并运行测试 ↗</button></div>}
@@ -265,6 +268,7 @@ function App() {
         return <details className="tool-card" key={e.sequence}><summary><span>{end ? (end.kind === 'tool.failed' || end.payload.failed || /Command failed with exit code/.test(end.payload.output || '')) ? '!' : '✓' : '◉'} {e.payload.name}</span><small>{new Date(e.timestamp).toLocaleTimeString('zh-CN', {hour12: false})}</small></summary><pre>{e.payload.input}</pre><pre>{end ? end.payload.output || end.payload.error_type : '正在执行…'}</pre></details>;
       })}{tab === 'changes' && changes.map(e => <details className="tool-card" key={e.sequence}><summary>{e.payload.path}</summary><pre className="diff">{e.payload.diff}</pre></details>)}{tab === 'events' && events.map(e => <details className="tool-card" key={e.sequence}><summary>{e.kind}<small>#{e.sequence}</small></summary><pre>{JSON.stringify(e.payload, null, 2)}</pre></details>)}{!events.length && <div className="empty-trace">⌁<h3>每一步，都有记录。</h3><p>任务开始后，在这里查看真实工具结果和文件变更。</p></div>}</section>
     </aside>}
+    {showFiles && <WorkspacePanel workspace={workspaces.find(w => w.id === workspace)} onClose={() => setShowFiles(false)} onImported={item => {setWorkspaces(old => [...old, item]); localStorage.setItem('agent-workspace', item.id); setWorkspace(item.id);}}/>}
     {showSettings && <SettingsPanel workspace={workspace} session={session} onClose={() => setShowSettings(false)} onSaved={() => setConfigEpoch(v => v + 1)}/>}
     {imagePreview && <div className="image-overlay" role="dialog" aria-modal="true" aria-label="图片预览" onClick={() => setImagePreview('')}><button aria-label="关闭图片预览" onClick={() => setImagePreview('')}>×</button><img src={'/next/api/attachments/' + imagePreview} alt="图片预览" onClick={e => e.stopPropagation()}/></div>}
   </div>;
