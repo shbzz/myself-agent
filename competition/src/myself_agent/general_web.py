@@ -8,11 +8,12 @@ import json
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal
+from urllib.parse import quote
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -26,6 +27,7 @@ from myself_agent.general_model import (
 )
 from myself_agent.general_settings import ConfigurationError, ModelInput, PolicyInput, ProviderInput
 from myself_agent.jobs import BusyError
+from myself_agent.workspace_files import WorkspaceFileError, WorkspaceFiles
 
 FRONTEND = Path(__file__).parents[2] / "frontend" / "dist"
 
@@ -33,6 +35,10 @@ FRONTEND = Path(__file__).parents[2] / "frontend" / "dist"
 class WorkspaceInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=80)
+
+
+class WorkspaceArchiveInput(WorkspaceInput):
+    data_base64: str = Field(max_length=12 * 1024 * 1024)
 
 
 class SessionInput(BaseModel):
@@ -81,7 +87,11 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
             if request.headers.get("content-type", "").split(";")[0] != "application/json":
                 return JSONResponse({"detail": "需要 JSON 请求"}, status_code=415)
             body = bytearray()
-            limit = 9 * 1024 * 1024 if request.url.path.endswith("/attachments") else 65536
+            limit = 65536
+            if request.url.path.endswith("/attachments"):
+                limit = 9 * 1024 * 1024
+            elif request.url.path == "/next/api/workspaces/import":
+                limit = 12 * 1024 * 1024 + 65536
             async for chunk in request.stream():
                 body.extend(chunk)
                 if len(body) > limit:
@@ -107,6 +117,10 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
 
     @app.exception_handler(ConfigurationError)
     async def invalid_configuration(request, error):
+        return JSONResponse({"detail": str(error)}, status_code=422)
+
+    @app.exception_handler(WorkspaceFileError)
+    async def invalid_workspace_file(request, error):
         return JSONResponse({"detail": str(error)}, status_code=422)
 
     @app.exception_handler(RequestValidationError)
@@ -203,6 +217,45 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
     @app.post("/next/api/workspaces", status_code=201)
     def create_workspace(body: WorkspaceInput, request: Request):
         return store(request).create_workspace(body.name)
+
+    @app.post("/next/api/workspaces/import", status_code=201)
+    def import_workspace(body: WorkspaceArchiveInput, request: Request):
+        try:
+            data = base64.b64decode(body.data_base64, validate=True)
+        except (ValueError, binascii.Error):
+            raise WorkspaceFileError("ZIP 编码无效，请重新选择文件") from None
+        return WorkspaceFiles(store(request)).import_archive(body.name, data)
+
+    @app.get("/next/api/workspaces/{workspace_id}/files")
+    def workspace_files(workspace_id: str, request: Request, path: str = Query(default="")):
+        return WorkspaceFiles(store(request)).listing(workspace_id, path)
+
+    @app.get("/next/api/workspaces/{workspace_id}/file")
+    def workspace_file(workspace_id: str, request: Request, path: str):
+        return WorkspaceFiles(store(request)).read(workspace_id, path, preview=True)
+
+    @app.get("/next/api/workspaces/{workspace_id}/download")
+    def download_workspace_file(workspace_id: str, request: Request, path: str):
+        data = WorkspaceFiles(store(request)).read(workspace_id, path)
+        filename = quote(path.rsplit("/", 1)[-1], safe="")
+        return Response(
+            data,
+            media_type="application/octet-stream",
+            headers={
+                "Content-Disposition": "attachment; filename=file; filename*=UTF-8''" + filename,
+            },
+        )
+
+    @app.get("/next/api/workspaces/{workspace_id}/archive")
+    def download_workspace(workspace_id: str, request: Request):
+        data = WorkspaceFiles(store(request)).export(workspace_id)
+        return Response(
+            data,
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="workspace-{workspace_id[:8]}.zip"',
+            },
+        )
 
     @app.get("/next/api/sessions")
     def sessions(request: Request, workspace_id: str):

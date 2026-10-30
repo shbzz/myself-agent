@@ -2,6 +2,7 @@
 
 import base64
 import json
+import shutil
 import sqlite3
 import uuid
 from contextlib import contextmanager
@@ -147,12 +148,23 @@ class AgentStore:
         with self.connect() as db:
             return [dict(r) for r in db.execute("SELECT * FROM workspaces ORDER BY created")]
 
-    def create_workspace(self, name):
+    def create_workspace(self, name, *, files=None):
         identifier = uuid.uuid4().hex
         directory = self.root / "workspaces" / identifier
         directory.mkdir(parents=True, mode=0o700)
-        with self.connect() as db:
-            db.execute("INSERT INTO workspaces VALUES (?,?,?)", (identifier, name, now()))
+        try:
+            for path, content in (files or {}).items():
+                # Files have been validated by archive_files; the new directory is private
+                # and is not published to sessions until every file has been written.
+                target = directory / path
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                target.write_bytes(content)
+                target.chmod(0o600)
+            with self.connect() as db:
+                db.execute("INSERT INTO workspaces VALUES (?,?,?)", (identifier, name, now()))
+        except Exception:
+            shutil.rmtree(directory)
+            raise
         return self.workspace(identifier)
 
     def session(self, identifier):
