@@ -85,9 +85,11 @@ artifact fingerprints and dependency-scoped feedback repair. All activated produ
 outputs must be covered by successful verification. See ORCHESTRATION.md and the
 validated examples/orchestration.json. No frontend source changes are included.
 
-Required home checks pass: 163 pytest cases, Ruff/format, static JS and TypeScript/Vite.
+Required home checks pass: 167 pytest cases, Ruff/format, static JS and TypeScript/Vite.
 The pre-existing LangGraph durability warning remains. Frontend source and asset hashes
-are unchanged.
+are unchanged. Enabled MCP server IDs/names are handed only to roles with effective
+MCP tools, without endpoint or credential metadata; read-only business-call denial
+and three authorized combinations are covered by deterministic Docker regressions.
 
 Durable APIs, immutable per-run snapshots, shared model/external-operation budgets,
 workspace write leases, cancellation, restart interruption and labelled-container

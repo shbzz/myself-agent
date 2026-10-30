@@ -344,3 +344,76 @@ def test_runner_does_not_read_unused_default_provider_credential(tmp_path, monke
     monkeypatch.setattr("myself_agent.orchestration_runtime.model_base_settings", unexpected)
     runner = DeepAgentRunner(store, run["id"], config_path=tmp_path / "no-official-key.env")
     assert runner.image == DEFAULT_IMAGE
+
+
+@pytest.mark.docker
+@pytest.mark.parametrize(
+    ("mcp_tools", "access", "sees_catalogue"),
+    [
+        (["mcp_list_tools"], "read", True),
+        (["mcp_call"], "write", True),
+        (["mcp_list_tools", "mcp_call"], "write", True),
+        (["mcp_call"], "read", False),
+    ],
+)
+def test_authorized_model_sees_mcp_ids_but_not_credentials(
+    tmp_path, settings, mcp_tools, access, sees_catalogue
+):
+    from myself_agent.general_settings import MCPServerInput, PolicyInput
+    from myself_agent.orchestration_models import AgentInput
+
+    store, baseline, _, session = new_workflow(
+        tmp_path, [work(access=access), review(checks=["python -V"])]
+    )
+    store.status(baseline["id"], "succeeded")
+    store.config.save_mcp_server(
+        MCPServerInput(
+            id="visible-mcp",
+            name="Configured server",
+            url="http://127.0.0.1:9876/mcp",
+            allowed_tools=["add"],
+            api_key="fixture-mcp-super-secret",
+        )
+    )
+    store.config.save_policy("global", PolicyInput(mcp_server_ids=["visible-mcp"]))
+    for identifier in ["worker-a", "worker-b"]:
+        store.orchestration.save(
+            "agent",
+            AgentInput(
+                id=identifier, name=identifier, skills=["build"], tools=["read_file", *mcp_tools]
+            ),
+        )
+    snapshot = store.orchestration.prepare(session["id"], "team", "flow", "off")
+    run, _ = store.submit(
+        session["id"],
+        uuid.uuid4().hex,
+        "metadata handoff",
+        reasoning_effort="off",
+        action="orchestrate",
+        orchestration=snapshot,
+    )
+    store.status(run["id"], "running")
+    seen = []
+
+    @contextmanager
+    def factory(request):
+        response = (
+            AIMessage(content="fixture handoff")
+            if request.node.kind == "agent"
+            else AIMessage(content='{"passed":true,"summary":"fixture review"}')
+        )
+        model = ScriptModel(responses=[response])
+        seen.append((request.node.kind, model))
+        yield model
+
+    assert (
+        run_orchestration(store, run["id"], model_factory=factory, image=settings.image)["passed"]
+        is True
+    )
+    for kind, model in seen:
+        prompt = str(model.seen[0][0].content)
+        assert ("visible-mcp" in prompt) == (kind == "agent" and sees_catalogue)
+        assert ("Configured server" in prompt) == (kind == "agent" and sees_catalogue)
+        assert "fixture-mcp-super-secret" not in str(model.seen)
+        assert "credential_ref" not in str(model.seen)
+        assert "http://127.0.0.1:9876/mcp" not in str(model.seen)
