@@ -1,12 +1,13 @@
 """Versioned model/provider/context configuration with server-only credential files."""
 
+import ipaddress
 import json
 import os
 import re
 import uuid
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator, model_validator
 
 ID = r"^[a-zA-Z0-9_-]{1,80}$"
 
@@ -29,6 +30,7 @@ class ProviderInput(BaseModel):
         parsed = urlsplit(self.base_url)
         if (
             parsed.scheme not in ("http", "https")
+            or any(ord(c) < 32 for c in self.base_url)
             or not parsed.hostname
             or parsed.username
             or parsed.password
@@ -72,6 +74,72 @@ class ModelInput(BaseModel):
         return self
 
 
+def web_hostname(value):
+    host = value.strip().lower().rstrip(".")
+    try:
+        host = host.encode("idna").decode("ascii")
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("网页白名单使用完整域名，不使用 IP 地址")
+    if (
+        len(host) > 253
+        or "." not in host
+        or host.endswith((".local", ".localhost", ".internal", ".lan"))
+        or any(
+            not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", p) for p in host.split(".")
+        )
+    ):
+        raise ValueError("请输入完整公网域名，不含协议、路径或通配符")
+    return host
+
+
+class MCPServerInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str | None = Field(default=None, pattern=ID)
+    name: str = Field(min_length=1, max_length=80)
+    url: str = Field(min_length=1, max_length=1024)
+    allowed_tools: list[str] = Field(default_factory=list, max_length=40)
+    api_key: SecretStr | None = None
+    remove_key: bool = False
+
+    @model_validator(mode="after")
+    def endpoint(self):
+        parsed = urlsplit(self.url)
+        try:
+            port = parsed.port
+            address = ipaddress.ip_address(parsed.hostname or "")
+            private_ranges = ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7")
+            local = address.is_loopback or any(
+                address in ipaddress.ip_network(network) for network in private_ranges
+            )
+        except ValueError:
+            local = parsed.hostname == "localhost"
+            port = None
+        if (
+            parsed.scheme not in ("http", "https")
+            or any(ord(c) < 32 for c in self.url)
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or (parsed.scheme == "http" and not local)
+        ):
+            raise ValueError("MCP 使用 HTTPS 地址；HTTP 仅用于明确的本机或私网 IP")
+        try:
+            port = parsed.port
+        except ValueError:
+            raise ValueError("MCP 端口无效") from None
+        if port == 0 or any(
+            not re.fullmatch(r"[a-zA-Z0-9_.:/-]{1,128}", name) for name in self.allowed_tools
+        ):
+            raise ValueError("MCP 工具名或端口无效；工具白名单不支持通配符")
+        self.allowed_tools = list(dict.fromkeys(self.allowed_tools))
+        return self
+
+
 class PolicyInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     model_profile_id: str | None = Field(default=None, pattern=ID)
@@ -84,6 +152,24 @@ class PolicyInput(BaseModel):
     max_model_calls: int | None = Field(default=None, ge=1, le=100)
     timeout_seconds: int | None = Field(default=None, ge=30, le=1800)
     tool_timeout_seconds: int | None = Field(default=None, ge=1, le=60)
+    web_enabled: bool | None = None
+    browser_enabled: bool | None = None
+    allowed_web_hosts: list[str] | None = Field(default=None, max_length=32)
+    max_web_requests: int | None = Field(default=None, ge=1, le=50)
+    max_mcp_calls: int | None = Field(default=None, ge=1, le=50)
+    mcp_server_ids: list[str] | None = Field(default=None, max_length=20)
+
+    @field_validator("allowed_web_hosts")
+    @classmethod
+    def domains(cls, values):
+        return list(dict.fromkeys(web_hostname(v) for v in values)) if values is not None else None
+
+    @field_validator("mcp_server_ids")
+    @classmethod
+    def servers(cls, values):
+        if values is not None and any(not re.fullmatch(ID, value) for value in values):
+            raise ValueError("MCP 服务 ID 无效")
+        return list(dict.fromkeys(values)) if values is not None else None
 
 
 DEFAULT_POLICY = {
@@ -97,6 +183,12 @@ DEFAULT_POLICY = {
     "max_model_calls": 24,
     "timeout_seconds": 600,
     "tool_timeout_seconds": 30,
+    "web_enabled": False,
+    "browser_enabled": False,
+    "allowed_web_hosts": [],
+    "max_web_requests": 20,
+    "mcp_server_ids": [],
+    "max_mcp_calls": 20,
 }
 
 
@@ -185,10 +277,9 @@ class ConfigurationStore:
             )
         return self.public(value | {"version": version})
 
-    def save_provider(self, body):
-        identifier = body.id or uuid.uuid4().hex
+    def credential_reference(self, kind, identifier, body):
         try:
-            credential_ref = self.get("provider", identifier).get("credential_ref")
+            credential_ref = self.get(kind, identifier).get("credential_ref")
         except KeyError:
             credential_ref = None
         if body.remove_key:
@@ -203,11 +294,31 @@ class ConfigurationStore:
             fd = os.open(directory / credential_ref, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w") as file:
                 file.write(secret)
+        return credential_ref
+
+    def save_provider(self, body):
+        identifier = body.id or uuid.uuid4().hex
         value = body.model_dump(exclude={"api_key", "remove_key"}) | {
             "id": identifier,
-            "credential_ref": credential_ref,
+            "credential_ref": self.credential_reference("provider", identifier, body),
         }
         return self.write("provider", identifier, value)
+
+    def save_mcp_server(self, body):
+        identifier = body.id or uuid.uuid4().hex
+        value = body.model_dump(exclude={"api_key", "remove_key"}) | {
+            "id": identifier,
+            "credential_ref": self.credential_reference("mcp", identifier, body),
+        }
+        return self.write("mcp", identifier, value)
+
+    @classmethod
+    def public_snapshot(cls, value):
+        return dict(
+            value,
+            provider=cls.public(value["provider"]),
+            mcp_servers=[cls.public(server) for server in value.get("mcp_servers", [])],
+        )
 
     def save_model(self, body):
         self.get("provider", body.provider_id)
@@ -244,7 +355,19 @@ class ConfigurationStore:
             raise ConfigurationError("上下文须为输入和工具保留至少 2048 tokens")
         if policy["compression_target_ratio"] >= policy["compression_trigger_ratio"]:
             raise ConfigurationError("压缩目标比例须小于触发比例")
-        return {"policy": policy, "profile": profile, "provider": provider, "revisions": revisions}
+        if policy["web_enabled"] and not policy["allowed_web_hosts"]:
+            raise ConfigurationError("启用网页工具前请设置允许访问的域名")
+        if policy["browser_enabled"] and not policy["web_enabled"]:
+            raise ConfigurationError("只读浏览器需要同时启用网页访问")
+        servers = [self.get("mcp", identifier) for identifier in policy["mcp_server_ids"]]
+        # Empty allowlists deny every tool, but must not lock users out of settings.
+        return {
+            "policy": policy,
+            "profile": profile,
+            "provider": provider,
+            "mcp_servers": servers,
+            "revisions": revisions,
+        }
 
     def save_policy(self, scope, body):
         override = body.model_dump(exclude_none=True)
