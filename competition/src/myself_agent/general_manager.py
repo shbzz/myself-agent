@@ -35,10 +35,25 @@ class AgentManager:
             self.store.event(run_id, "run.interrupted", {"reason": "ServerRestart"})
         self.pool = ThreadPoolExecutor(max_workers=1)
 
-    def submit(self, session_id, request_id, text, attachment_ids=(), reasoning_effort="low"):
+    def submit(
+        self,
+        session_id,
+        request_id,
+        text,
+        attachment_ids=(),
+        reasoning_effort="low",
+        model_profile_id=None,
+        action="message",
+    ):
         with self.lock:
             run, created = self.store.submit(
-                session_id, request_id, text, attachment_ids, reasoning_effort
+                session_id,
+                request_id,
+                text,
+                attachment_ids,
+                reasoning_effort,
+                model_profile_id,
+                action,
             )
             if created:
                 self.store.event(run["id"], "run.queued", {})
@@ -74,7 +89,9 @@ class AgentManager:
             )
             self.processes[run_id] = process
         try:
-            code = process.wait(timeout=600)
+            code = process.wait(
+                timeout=self.store.run_configuration(run_id)["policy"]["timeout_seconds"]
+            )
             with self.lock:
                 if self.store.run(run_id)["status"] == "running":
                     status = "succeeded" if code == 0 else "failed"

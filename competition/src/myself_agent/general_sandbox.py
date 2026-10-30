@@ -14,7 +14,7 @@ from deepagents.backends.sandbox import BaseSandbox
 
 
 class WorkspaceSandbox(BaseSandbox):
-    def __init__(self, workspace, image, run_id):
+    def __init__(self, workspace, image, run_id, tool_timeout=30):
         if not re.fullmatch(r"[a-f0-9]{32}", run_id):
             raise ValueError("Invalid run ID")
         if not re.fullmatch(r"python@sha256:[a-f0-9]{64}", image):
@@ -22,6 +22,7 @@ class WorkspaceSandbox(BaseSandbox):
         self.workspace = workspace.resolve(strict=True)
         self.image = image
         self.name = "myself-agent-general-" + run_id
+        self.tool_timeout = tool_timeout
 
     @property
     def id(self):
@@ -76,7 +77,7 @@ class WorkspaceSandbox(BaseSandbox):
         self.close()
 
     def execute(self, command, *, timeout=None):
-        limit = min(timeout or 30, 60)
+        limit = min(timeout or self.tool_timeout, 60)
         process = subprocess.Popen(
             ["sudo", "-n", "docker", "exec", "-w", "/workspace", self.name, "sh", "-lc", command],
             stdout=subprocess.PIPE,

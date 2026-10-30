@@ -7,6 +7,7 @@ import uuid
 from contextlib import contextmanager
 from datetime import UTC, datetime
 
+from myself_agent.general_settings import ConfigurationError, ConfigurationStore
 from myself_agent.jobs import BusyError
 
 
@@ -49,10 +50,33 @@ class AgentStore:
                 db.execute(
                     "ALTER TABLE runs ADD COLUMN reasoning_effort TEXT NOT NULL DEFAULT 'off'"
                 )
+            if "configuration" not in columns:
+                db.execute("ALTER TABLE runs ADD COLUMN configuration TEXT")
+            if "action" not in columns:
+                db.execute("ALTER TABLE runs ADD COLUMN action TEXT NOT NULL DEFAULT 'message'")
+        self.config = ConfigurationStore(self)
 
     @staticmethod
     def run_row(row):
-        return dict(row) | {"attachment_ids": json.loads(row["attachment_ids"])}
+        value = dict(row) | {"attachment_ids": json.loads(row["attachment_ids"])}
+        configuration = json.loads(row["configuration"]) if row["configuration"] else None
+        if configuration:
+            configuration["provider"] = ConfigurationStore.public(configuration["provider"])
+        value["configuration"] = configuration
+        return value
+
+    def run_configuration(self, run_id):
+        with self.connect() as db:
+            row = db.execute(
+                "SELECT configuration,session_id FROM runs WHERE id=?", (run_id,)
+            ).fetchone()
+        if row is None:
+            raise KeyError(run_id)
+        return (
+            json.loads(row["configuration"])
+            if row["configuration"]
+            else self.config.resolve(session_id=row["session_id"])
+        )
 
     def attachment(self, identifier):
         with self.connect() as db:
@@ -165,8 +189,31 @@ class AgentStore:
             raise KeyError(identifier)
         return self.run_row(row)
 
-    def submit(self, session_id, request_id, text, attachment_ids=(), reasoning_effort="low"):
+    def submit(
+        self,
+        session_id,
+        request_id,
+        text,
+        attachment_ids=(),
+        reasoning_effort="low",
+        model_profile_id=None,
+        action="message",
+    ):
         self.session(session_id)
+        configuration = self.config.resolve(
+            session_id=session_id,
+            override=({"model_profile_id": model_profile_id} if model_profile_id else None),
+        )
+        profile = configuration["profile"]
+        if reasoning_effort not in profile["reasoning_levels"]:
+            raise ConfigurationError("所选模型未声明此思考等级，请调整等级或模型能力设置")
+        if not profile["images"]:
+            with self.connect() as db:
+                images = db.execute(
+                    "SELECT 1 FROM runs WHERE session_id=? AND attachment_ids!='[]'", (session_id,)
+                ).fetchone()
+            if attachment_ids or images:
+                raise ConfigurationError("此会话包含图片，请选择声明支持图片的模型")
         for identifier in attachment_ids:
             if self.attachment(identifier)["session_id"] != session_id:
                 raise BusyError("图片不属于当前会话")
@@ -179,6 +226,12 @@ class AgentStore:
                     or previous["text"] != text
                     or json.loads(previous["attachment_ids"]) != list(attachment_ids)
                     or previous["reasoning_effort"] != reasoning_effort
+                    or previous["action"] != action
+                    or (
+                        model_profile_id
+                        and json.loads(previous["configuration"])["profile"]["id"]
+                        != model_profile_id
+                    )
                 ):
                     raise BusyError("同一请求编号不能用于不同内容")
                 return self.run_row(previous), False
@@ -186,7 +239,7 @@ class AgentStore:
                 raise BusyError("已有任务正在运行，请等待或停止它")
             identifier = uuid.uuid4().hex
             db.execute(
-                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO runs VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     identifier,
                     session_id,
@@ -198,6 +251,8 @@ class AgentStore:
                     None,
                     json.dumps(list(attachment_ids)),
                     reasoning_effort,
+                    json.dumps(configuration),
+                    action,
                 ),
             )
             db.execute(

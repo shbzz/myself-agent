@@ -98,3 +98,7 @@ continued across tool turns. It recovered from a real read-before-write race; th
 is a smoke-test observation, not a measured repair rate. Browser QA confirmed
 35 layout states, inline command/output/time, default-collapsed reasoning, and
 image preview/upload/paste without page errors.
+
+## Model and context increment
+
+Provider/model/context settings, version snapshots and real automatic/manual compression are implemented; see MODEL_SETTINGS.md. Older future-scope statements above describe the earlier increment.
