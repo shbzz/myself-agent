@@ -1,5 +1,6 @@
 """Versioned team/workflow registry and durable task evidence beside general sessions."""
 
+import copy
 import json
 import uuid
 
@@ -61,6 +62,7 @@ class OrchestrationStore:
             )
             # Policy values are frozen from the parent; provenance must match.
             model_config["revisions"] = dict(config["revisions"])
+            model_config["mcp_servers"] = copy.deepcopy(config["mcp_servers"])
             if effort not in model_config["profile"]["reasoning_levels"]:
                 raise ConfigurationError("A team model does not support this reasoning effort")
             if not model_config["profile"]["tools"]:

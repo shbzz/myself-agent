@@ -409,3 +409,39 @@ def test_role_policy_provenance_stays_frozen_during_concurrent_edit(tmp_path, mo
             == 20
         )
         assert member["configuration"]["revisions"] == frozen["revisions"]
+
+
+def test_role_external_policy_stays_frozen_during_concurrent_edit(tmp_path, monkeypatch):
+    from myself_agent.general_settings import MCPServerInput
+
+    store, run, _, session = new_workflow(tmp_path, [work(), review()])
+    store.status(run["id"], "succeeded")
+    store.config.save_mcp_server(
+        MCPServerInput(
+            id="mcp", name="old", url="http://127.0.0.1:9876/mcp", allowed_tools=["old-tool"]
+        )
+    )
+    store.config.save_policy("global", PolicyInput(mcp_server_ids=["mcp"]))
+    original = store.config.resolve
+    edited = False
+
+    def resolve(*args, **kwargs):
+        nonlocal edited
+        if kwargs.get("override") and not edited:
+            edited = True
+            store.config.save_mcp_server(
+                MCPServerInput(
+                    id="mcp",
+                    name="new",
+                    url="http://127.0.0.1:9876/mcp",
+                    allowed_tools=["new-tool"],
+                )
+            )
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(store.config, "resolve", resolve)
+    snapshot = store.orchestration.prepare(session["id"], "team", "flow", "off")
+    assert edited and store.config.get("mcp", "mcp")["version"] == 2
+    frozen = snapshot["configuration"]["mcp_servers"]
+    assert frozen[0]["allowed_tools"] == ["old-tool"]
+    assert all(member["configuration"]["mcp_servers"] == frozen for member in snapshot["agents"])
