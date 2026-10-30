@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react';
+import {ToolSettingsPanel} from './ToolSettingsPanel';
 
 export async function settingsApi(path: string, body?: unknown) {
   const response = await fetch('/next/api' + path, body === undefined ? {} : {
@@ -54,15 +55,15 @@ export function SettingsPanel({workspace, session, onClose, onSaved}: {
   async function savePolicy() {
     await action(async () => {
       const id = scope === 'global' ? 'global' : scope === 'session' ? session : workspace;
-      await settingsApi('/settings/' + scope + '/' + id, policy);
+      await settingsApi('/settings/' + scope + '/' + id, Object.fromEntries(Object.entries(policy).filter(([key]) => !['web_enabled','browser_enabled','allowed_web_hosts','max_web_requests','max_mcp_calls','mcp_server_ids'].includes(key))));
       await reload(); setStatus('设置已保存，将用于后续运行；正在执行的任务保持原配置。');
     });
   }
   const field = (label: string, value: any, change: (v: string) => void, type='text') => <label>{label}<input type={type} value={value ?? ''} onChange={e => change(e.target.value)}/></label>;
   return <div className="settings-overlay" role="dialog" aria-modal="true" aria-label="设置">
     <section className="settings-panel"><header><strong>设置</strong><button onClick={onClose} aria-label="关闭设置">×</button></header>
-      <nav className="settings-tabs">{[['providers','供应商'],['models','模型能力'],['context','上下文与执行'],['records','压缩记录']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} className={tab === id ? 'active' : ''}>{label}</button>)}</nav>
-      <div className="settings-content">{status && <p role="status" className="settings-status">{status}</p>}
+      <nav className="settings-tabs">{[['providers','供应商'],['models','模型能力'],['context','上下文与执行'],['records','压缩记录'],['tools','工具与 MCP']].map(([id,label]) => <button key={id} onClick={() => setTab(id)} className={tab === id ? 'active' : ''}>{label}</button>)}</nav>
+      <div className="settings-content">{tab === 'tools' && <ToolSettingsPanel workspace={workspace} session={session} onSaved={() => {onSaved(); reload().catch(e => setStatus(e.message));}}/>}{status && <p role="status" className="settings-status">{status}</p>}
       {tab === 'providers' && <div className="settings-form">
         <label>编辑供应商<select aria-label="编辑供应商" value={provider.id} onChange={e => {const p = providers.find(p => p.id === e.target.value); if (p) {const {version, has_key, ...fields} = p; setProvider({...blankProvider, ...fields});} else setProvider(blankProvider);}}><option value="">＋ 新供应商</option>{providers.map(p => <option key={p.id} value={p.id}>{p.name} · v{p.version}{p.has_key ? ' · 已配置密钥' : ''}</option>)}</select></label>
         {field('名称', provider.name, v => setProvider({...provider, name:v}))}

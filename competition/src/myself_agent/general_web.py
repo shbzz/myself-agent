@@ -15,18 +15,26 @@ from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from langchain_core.tools import ToolException
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
-from myself_agent.config import DEFAULT_CONFIG
+from myself_agent.config import DEFAULT_CONFIG, Settings
 from myself_agent.general_manager import AgentManager
 from myself_agent.general_model import (
     general_model_session,
     model_base_settings,
     provider_credential,
 )
-from myself_agent.general_settings import ConfigurationError, ModelInput, PolicyInput, ProviderInput
+from myself_agent.general_settings import (
+    ConfigurationError,
+    MCPServerInput,
+    ModelInput,
+    PolicyInput,
+    ProviderInput,
+)
 from myself_agent.jobs import BusyError
+from myself_agent.mcp_tools import MCPAccess
 from myself_agent.workspace_files import WorkspaceFileError, WorkspaceFiles
 
 FRONTEND = Path(__file__).parents[2] / "frontend" / "dist"
@@ -172,6 +180,23 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
                 status_code=502, detail=f"连接失败（{type(error).__name__}），请检查地址和密钥"
             ) from None
 
+    @app.get("/next/api/mcp/servers")
+    def mcp_servers(request: Request):
+        return {"servers": store(request).config.list("mcp")}
+
+    @app.post("/next/api/mcp/servers", status_code=201)
+    def save_mcp_server(body: MCPServerInput, request: Request):
+        return store(request).config.save_mcp_server(body)
+
+    @app.post("/next/api/mcp/servers/{server_id}/test")
+    def test_mcp_server(server_id: str, request: Request):
+        db = store(request)
+        server = db.config.get("mcp", server_id)
+        try:
+            return MCPAccess(db, [server], Settings.proxy, 15).execute(server_id, discover=True)
+        except ToolException as error:
+            raise HTTPException(status_code=502, detail=str(error)) from None
+
     @app.get("/next/api/models")
     def models(request: Request):
         return {"models": store(request).config.list("model")}
@@ -185,8 +210,7 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
         request: Request, workspace_id: str | None = None, session_id: str | None = None
     ):
         result = store(request).config.resolve(workspace_id, session_id)
-        result["provider"] = store(request).config.public(result["provider"])
-        return result
+        return store(request).config.public_snapshot(result)
 
     @app.post("/next/api/settings/{scope}/{identifier}")
     def save_settings(

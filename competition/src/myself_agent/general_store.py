@@ -62,7 +62,7 @@ class AgentStore:
         value = dict(row) | {"attachment_ids": json.loads(row["attachment_ids"])}
         configuration = json.loads(row["configuration"]) if row["configuration"] else None
         if configuration:
-            configuration["provider"] = ConfigurationStore.public(configuration["provider"])
+            configuration = ConfigurationStore.public_snapshot(configuration)
         value["configuration"] = configuration
         return value
 

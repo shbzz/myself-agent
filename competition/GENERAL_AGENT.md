@@ -27,13 +27,15 @@ The root directory is a separate preview data directory, never the legacy job DB
 Containers have only the selected workspace bind-mounted, no model credentials,
 no Docker socket, no network, a read-only root filesystem and resource/time/output
 limits. Files under `/workspace` persist; `/tmp` is disposable per run. The current
-image is the existing pinned Python image, so tools requiring Node/browser/network
-are not yet available. Workspace import and choosing arbitrary host paths are not
-part of this increment.
+image is the existing pinned Python image; Node and direct network access inside it
+remain unavailable. ZIP import and workspace artifacts are documented in WORKSPACE_FILES.md.
+Separately authorized web/browser/MCP capabilities are documented in EXTERNAL_TOOLS.md;
+they do not give the execution container network access or arbitrary host paths.
 
 The default model remains the existing official DeepSeek Flash configuration.
-Custom providers/model controls, user-configured context budgets,
-settings, token-by-token rendering, MCP and competition team orchestration remain
+Provider/model/context settings and snapshots are implemented (MODEL_SETTINGS.md),
+as are workspace import/artifacts (WORKSPACE_FILES.md) and controlled external tools
+(EXTERNAL_TOOLS.md). Token-by-token rendering and competition team orchestration remain
 subsequent work in REBUILD_PLAN.md. Plain messages and tool events stream as complete
 records; this increment does not claim token-level streaming or full crash-resume.
 
@@ -83,7 +85,8 @@ Thinking can be off/low/high/max per run (default low). The adapter preserves
 reasoning_content in subsequent assistant/tool rounds. Image attachments persist
 per session, appear in user messages and use genuine multimodal image_url blocks.
 Upload, paste, drag/drop, preview and removal are supported. Up to four 6 MiB
-PNG/JPEG/GIF/WebP images per message; uploads have a separate 9 MiB gateway limit.
+PNG/JPEG/GIF/WebP images per message; the application image-upload limit is 9 MiB.
+The gateway accommodates 13 MiB requests for Base64 ZIP imports.
 The existing gateway credentials protect preview and attachment routes.
 
 API additions: POST /sessions/{id}/attachments with filename and data_base64;
@@ -102,3 +105,10 @@ image preview/upload/paste without page errors.
 ## Model and context increment
 
 Provider/model/context settings, version snapshots and real automatic/manual compression are implemented; see MODEL_SETTINGS.md. Older future-scope statements above describe the earlier increment.
+
+
+## External tools increment
+
+See EXTERNAL_TOOLS.md for explicit tool policies, read-only Chromium, MCP profiles,
+operation budgets, version snapshots, security boundaries and real-model verification.
+External tools are off by default. Competition multi-Agent orchestration is still next.

@@ -51,3 +51,26 @@ This increment does not call a paid model. Continue with external research/brows
 MCP tools, then Agent registration, configurable workflows, dynamic scheduling,
 independent verification/repair and competition evidence. The owner's frontend
 visual redesign remains deferred until these functions are complete.
+
+
+## Controlled external tools - 2026-10-30
+
+Workspace import/file delivery has landed in main (#4). The next increment adds
+explicit system/workspace/session policies for HTTPS page reads, sandboxed read-only
+Chromium and whitelisted MCP Streamable HTTP tools. Browser screenshots appear in
+conversation. Profiles, secrets and enabled tools are frozen per run; old snapshots
+remain stable. See EXTERNAL_TOOLS.md for API, limits and unsupported modes.
+
+98 pytest cases and required Ruff/TypeScript/Vite checks pass. Real authenticated MCP,
+Chromium and Docker are exercised with a deterministic model in regression tests.
+A separate bounded DeepSeek Flash task succeeded against an actual public page,
+Chromium screenshot, controlled local MCP server and container verification; actual
+usage is 20383 tokens (including 15360 cached input). Browser tests verify configuration,
+secret non-echo, prior-run snapshots, inline activity and desktop/mobile geometry.
+Clearing an enabled MCP allowlist denies all calls without locking configuration;
+regression checks cover all three policy scopes, UI deselection and reload recovery.
+Host evidence remains outside Git. Do not deploy fixture profiles or test data.
+
+Next: Agent registration/capabilities, configurable workflow/control structures,
+dynamic planning/scheduling, independent verification/repair, recovery and competition
+baselines. Do not spend the next round on full browser automation or visual redesign.
