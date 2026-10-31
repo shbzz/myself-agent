@@ -97,14 +97,9 @@ class OrchestrationStore:
             return previous
         return self.prepare(session_id, team_id, workflow_id, effort)
 
-    def snapshot(self, run_id, *, public=False):
-        with self.store.connect() as db:
-            row = db.execute(
-                "SELECT snapshot FROM orchestrations WHERE run_id=?", (run_id,)
-            ).fetchone()
-        if not row:
-            raise KeyError(run_id)
-        value = json.loads(row["snapshot"])
+    @staticmethod
+    def _snapshot_value(raw, public):
+        value = json.loads(raw)
         if public:
             value["configuration"] = ConfigurationStore.public_snapshot(value["configuration"])
             value["agents"] = [
@@ -119,6 +114,15 @@ class OrchestrationStore:
                 for a in value["agents"]
             ]
         return value
+
+    def snapshot(self, run_id, *, public=False):
+        with self.store.connect() as db:
+            row = db.execute(
+                "SELECT snapshot FROM orchestrations WHERE run_id=?", (run_id,)
+            ).fetchone()
+        if not row:
+            raise KeyError(run_id)
+        return self._snapshot_value(row["snapshot"], public)
 
     def task(self, run_id, path, node, status, *, agent_id=None, attempt_id=None, result=None):
         with self.store.connect() as db:
@@ -166,16 +170,20 @@ class OrchestrationStore:
             },
         )
 
-    def tasks(self, run_id):
-        self.snapshot(run_id)
-        with self.store.connect() as db:
-            rows = db.execute(
-                "SELECT * FROM orchestration_tasks WHERE run_id=? ORDER BY created,path", (run_id,)
-            ).fetchall()
+    @staticmethod
+    def _tasks(db, run_id):
+        rows = db.execute(
+            "SELECT * FROM orchestration_tasks WHERE run_id=? ORDER BY created,path", (run_id,)
+        ).fetchall()
         return [
             dict(row) | {"result": json.loads(row["result"]) if row["result"] else None}
             for row in rows
         ]
+
+    def tasks(self, run_id):
+        self.snapshot(run_id)
+        with self.store.connect() as db:
+            return self._tasks(db, run_id)
 
     def finish(self, run_id, result):
         with self.store.connect() as db:
@@ -186,36 +194,61 @@ class OrchestrationStore:
             )
             return updated.rowcount == 1
 
+    @staticmethod
+    def _interrupt(db, run_id, status, reason, *, preserve_result=False):
+        parent = db.execute("SELECT status FROM runs WHERE id=?", (run_id,)).fetchone()
+        if parent and parent[0] == "cancelled":
+            status = "cancelled"
+        db.execute(
+            "UPDATE orchestration_tasks SET status=?,updated=? WHERE run_id=? AND status='running'",
+            (status, now(), run_id),
+        )
+        previous = db.execute(
+            "SELECT result FROM orchestrations WHERE run_id=?", (run_id,)
+        ).fetchone()
+        if previous and previous[0]:
+            if preserve_result or json.loads(previous[0]).get("status") == "cancelled":
+                return
+        db.execute(
+            "UPDATE orchestrations SET result=? WHERE run_id=?",
+            (json.dumps({"status": status, "reason": reason}), run_id),
+        )
+
     def interrupt(self, run_id, status, reason):
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            parent = db.execute("SELECT status FROM runs WHERE id=?", (run_id,)).fetchone()
-            if parent and parent[0] == "cancelled":
-                status = "cancelled"
-            db.execute(
-                "UPDATE orchestration_tasks SET status=?,updated=? "
-                "WHERE run_id=? AND status='running'",
-                (status, now(), run_id),
+            self._interrupt(db, run_id, status, reason)
+
+    def stop(self, run_id, status, reason):
+        """Commit supervisor failure/cancellation and child evidence as one transition."""
+        if status not in {"failed", "cancelled", "interrupted"}:
+            raise ValueError("Invalid supervisor stop status")
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            updated = db.execute(
+                "UPDATE runs SET status=?,updated=?,error_type=? "
+                "WHERE id=? AND status IN ('queued','running')",
+                (status, now(), reason, run_id),
             )
-            previous = db.execute(
-                "SELECT result FROM orchestrations WHERE run_id=?", (run_id,)
-            ).fetchone()
-            if previous and previous[0] and json.loads(previous[0]).get("status") == "cancelled":
-                return
-            db.execute(
-                "UPDATE orchestrations SET result=? WHERE run_id=?",
-                (json.dumps({"status": status, "reason": reason}), run_id),
-            )
+            if not updated.rowcount:
+                return False
+            self._interrupt(db, run_id, status, reason, preserve_result=status == "failed")
+            return True
 
     def run(self, run_id):
-        snapshot = self.snapshot(run_id, public=True)
         with self.store.connect() as db:
-            row = db.execute(
-                "SELECT result FROM orchestrations WHERE run_id=?", (run_id,)
+            # A single read transaction prevents mixing terminal parent state with
+            # an earlier result/task list even while a supervisor commits a stop.
+            db.execute("BEGIN")
+            row = db.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+            orchestration = db.execute(
+                "SELECT snapshot,result FROM orchestrations WHERE run_id=?", (run_id,)
             ).fetchone()
-        return {
-            "run": self.store.run(run_id),
-            "snapshot": snapshot,
-            "tasks": self.tasks(run_id),
-            "result": json.loads(row["result"]) if row["result"] else None,
-        }
+            if not row or not orchestration:
+                raise KeyError(run_id)
+            return {
+                "run": self.store.run_row(row),
+                "snapshot": self._snapshot_value(orchestration["snapshot"], True),
+                "tasks": self._tasks(db, run_id),
+                "result": json.loads(orchestration["result"]) if orchestration["result"] else None,
+            }

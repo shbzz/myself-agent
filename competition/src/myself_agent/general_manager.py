@@ -32,8 +32,7 @@ class AgentManager:
             ]
         for run_id in active:
             self.cleanup(run_id)
-            self.store.status(run_id, "interrupted", "ServerRestart")
-            self.store.orchestration.interrupt(run_id, "interrupted", "ServerRestart")
+            self.store.orchestration.stop(run_id, "interrupted", "ServerRestart")
             self.store.event(run_id, "run.interrupted", {"reason": "ServerRestart"})
         self.pool = ThreadPoolExecutor(max_workers=1)
 
@@ -113,8 +112,7 @@ class AgentManager:
                     start_new_session=True,
                 )
             except Exception as error:
-                self.store.status(run_id, "failed", type(error).__name__)
-                self.store.orchestration.interrupt(run_id, "failed", type(error).__name__)
+                self.store.orchestration.stop(run_id, "failed", type(error).__name__)
                 self.store.event(run_id, "run.error", {"error_type": type(error).__name__})
                 return
             self.processes[run_id] = process
@@ -125,7 +123,10 @@ class AgentManager:
             with self.lock:
                 if self.store.run(run_id)["status"] == "running":
                     status = "succeeded" if code == 0 else "failed"
-                    self.store.status(run_id, status, None if code == 0 else "AgentExecutionError")
+                    if code == 0:
+                        self.store.status(run_id, status)
+                    else:
+                        self.store.orchestration.stop(run_id, status, "AgentExecutionError")
                     self.store.event(run_id, "run.status", {"status": status})
         except subprocess.TimeoutExpired:
             self.cancel(run_id, "Timeout")
@@ -171,8 +172,7 @@ class AgentManager:
         with self.lock:
             if self.store.run(run_id)["status"] not in ("running", "queued"):
                 return self.store.run(run_id)
-            self.store.status(run_id, "cancelled", reason)
-            self.store.orchestration.interrupt(run_id, "cancelled", reason)
+            self.store.orchestration.stop(run_id, "cancelled", reason)
             process = self.processes.get(run_id)
             if process is not None and process.poll() is None:
                 os.killpg(process.pid, signal.SIGTERM)

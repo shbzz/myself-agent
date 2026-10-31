@@ -85,7 +85,7 @@ artifact fingerprints and dependency-scoped feedback repair. All activated produ
 outputs must be covered by successful verification. See ORCHESTRATION.md and the
 validated examples/orchestration.json. No frontend source changes are included.
 
-Required home checks pass: 167 pytest cases, Ruff/format, static JS and TypeScript/Vite.
+Required home checks pass: 172 pytest cases, Ruff/format, static JS and TypeScript/Vite.
 The pre-existing LangGraph durability warning remains. Frontend source and asset hashes
 are unchanged. Enabled MCP server IDs/names are handed only to roles with effective
 MCP tools, without endpoint or credential metadata; read-only business-call denial
@@ -107,3 +107,12 @@ paid-run records and deployment scripts stay outside Git. Do not deploy test pro
 Next: controlled evaluation baselines, knowledge citations, human intervention and
 safe recovery, then frontend orchestration/monitoring. Do not claim distributed
 queues, cross-run replay, vector memory or visual workflow editing are implemented.
+
+### Terminal consistency follow-up - 2026-10-31
+
+A resumed full regression exposed a supervisor race: parent failure was visible
+before its orchestration result. Supervisor stop transitions now commit parent,
+active tasks and result atomically, and public details use one read snapshot.
+Regression tests prove rollback on an injected SQLite failure, cancellation fences,
+concurrent read consistency and preservation of completed rejection evidence.
+The full 172-test home gate passes; no frontend changes or extra paid product run.
