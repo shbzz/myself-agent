@@ -94,6 +94,15 @@ class PlanningStore:
             "workspace": workspace_evidence(self.store, request["session_id"]),
         }
 
+    def record_usage(self, run_id, usage):
+        """Retain observed provider usage even if a draft is invalid or arrives after cancel."""
+        with self.store.connect() as db:
+            updated = db.execute(
+                "UPDATE planning_jobs SET usage=? WHERE run_id=? AND usage IS NULL",
+                (canonical(usage), run_id),
+            )
+            return updated.rowcount == 1
+
     def finish(self, run_id, proposal, usage):
         snapshot = self.snapshot(run_id)
         workflow = compile_plan(proposal, snapshot["request"], snapshot["team_snapshot"], run_id)
@@ -127,6 +136,7 @@ class PlanningStore:
             "status": row["status"],
             "request": snapshot["request"],
             "workspace": snapshot["workspace"],
+            "knowledge": snapshot["team_snapshot"].get("knowledge"),
             "team": snapshot["team_snapshot"]["team"],
             "policy": snapshot["team_snapshot"]["configuration"]["policy"],
             "revisions": snapshot["team_snapshot"]["configuration"]["revisions"],
@@ -160,7 +170,7 @@ class PlanningStore:
             request["session_id"], request["team_id"], request["reasoning_effort"]
         )
         if canonical(current) != canonical(snapshot["team_snapshot"]):
-            raise BusyError("团队、模型或策略已变更，请重新规划后确认")
+            raise BusyError("团队、模型、策略或知识版本已变更，请重新规划后确认")
         if (
             workspace_evidence(self.store, request["session_id"])["manifest"]
             != snapshot["workspace"]["manifest"]

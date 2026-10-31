@@ -69,3 +69,15 @@ home 完整检查通过：195项pytest（含23项规划专项）、Ruff/格式�
 规划1次、执行6次，14.641秒，10976 tokens（缓存5504）。
 验证了规划不执行、明确摘要批准、独立冻结验收通过。两次记录不是成功率或提效结论。
 主机证据及付费运行数据留在Git之外，正式部署不复制夹具和测试团队。
+
+
+### Knowledge and failed-call accounting
+
+Agents may explicitly reference workspace knowledge and approved experience; their
+frozen revisions enter the plan digest. The planner receives only bounded passages
+within its own grant. Changed referenced revisions invalidate a not-yet-executed
+approval; execution retains the approved snapshot. See KNOWLEDGE.md.
+Observed model-call/provider usage is now recorded before proposal validation, also
+on malformed, truncated or late-cancelled responses. Provider usage availability is
+explicit; missing provider accounting is not zero-cost evidence. Schema-error events
+record error types only, not model-generated field names, values or credentials.

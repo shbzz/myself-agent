@@ -62,6 +62,9 @@ class AgentStore:
         from myself_agent.planning_store import PlanningStore
 
         self.planning = PlanningStore(self)
+        from myself_agent.knowledge_store import KnowledgeStore
+
+        self.knowledge = KnowledgeStore(self)
 
     @staticmethod
     def run_row(row):

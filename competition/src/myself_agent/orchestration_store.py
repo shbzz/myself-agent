@@ -64,7 +64,11 @@ class OrchestrationStore:
             if not model_config["profile"]["tools"]:
                 raise ConfigurationError("Team models must declare tool support")
             agents.append({"definition": definition, "configuration": model_config})
-        return {"configuration": config, "team": team, "agents": agents}
+        snapshot = {"configuration": config, "team": team, "agents": agents}
+        knowledge = self.store.knowledge.freeze(session_id, [a["definition"] for a in agents])
+        if knowledge is not None:
+            snapshot["knowledge"] = knowledge
+        return snapshot
 
     def prepare(self, session_id, team_id, workflow_id, effort):
         snapshot = self.prepare_team(session_id, team_id, effort)

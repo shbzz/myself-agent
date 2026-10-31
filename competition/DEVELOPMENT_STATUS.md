@@ -137,3 +137,41 @@ Validation: required home gate passes 195 tests, Ruff lint/format, static JS and
 TypeScript/Vite. The existing LangGraph durability warning remains. Of these,
 23 planning cases cover compilation, approval, concurrency boundaries, secrecy,
 rejection and real Docker final evidence. Frontend sources/assets are unchanged.
+
+
+## Versioned knowledge and reviewed experience - 2026-10-31
+
+PR #7 is merged. This backend increment adds explicit workspace-scoped text sources,
+immutable revisions/chunk citations, per-Agent opt-in grants, bounded deterministic
+lexical retrieval and knowledge snapshots bound to plan approval and execution.
+Experience proposals require successful independent command/artifact evidence and
+stay inert until explicit review; correction requires reapproval, withdrawal retains
+audit history and remains possible at storage quotas. See KNOWLEDGE.md.
+
+No frontend or upstream libs source changes. No vector service, unbounded crawler,
+automatic memory promotion, multi-user RBAC or semantic-truth guarantee is claimed.
+New tests cover isolation, concurrency, version/citation fidelity, review lifecycle,
+stale approvals, storage rollback/limits, and real Docker acceptance/rejection.
+
+Live evidence is mixed and retained: knowledge-aware planning was rejected before
+execution (ValidationError; original failed-call token usage unavailable). No planner
+retry. A separate explicit-workflow executor fixture succeeded within the original
+unused execution allowance: 5 calls / 10.117 s / 8815 tokens (4736 cached). This is
+not live generated-plan success or a comparative benefit claim. The discovered
+failure-accounting gap is fixed and regression-tested; hard kills can still lose
+final provider accounting.
+
+WorkBuddy cn:deepseek-v4.1-flash/max supplied a narrowly scoped contract-test draft;
+main reviewed and tested it before integration. Development subagent usage is separate
+from product evidence (3 calls / 15006 tokens / 7808 cached / 18.542 s).
+
+Next: mid-run human decisions, safe checkpoint continuation and artifact rollback;
+then frozen fair comparisons, and only then frontend orchestration/monitoring and
+competition submission materials. This increment does not complete that roadmap.
+
+Final home gate for this increment: **243 passed** (48 new cases), Ruff lint/format,
+static JavaScript syntax, TypeScript and Vite. One existing LangGraph durability
+warning remains. Frontend sources and built CSS/JS hashes are unchanged. A too-broad
+new assertion initially matched `999` inside a random message UUID; it now checks
+the full replacement-source sentence. The original failed log is retained outside
+Git; no product behavior or independent acceptance was relaxed.

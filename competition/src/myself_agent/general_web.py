@@ -34,6 +34,7 @@ from myself_agent.general_settings import (
     ProviderInput,
 )
 from myself_agent.jobs import BusyError
+from myself_agent.knowledge_api import router as knowledge_router
 from myself_agent.mcp_tools import MCPAccess
 from myself_agent.orchestration_api import router as orchestration_router
 from myself_agent.workspace_files import WorkspaceFileError, WorkspaceFiles
@@ -80,6 +81,7 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
 
     app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
     app.include_router(orchestration_router)
+    app.include_router(knowledge_router)
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["localhost", "127.0.0.1", "testserver", "agent.foxbh.top"],
@@ -98,7 +100,9 @@ def create_app(root, config_path=DEFAULT_CONFIG, manager_factory=AgentManager):
                 return JSONResponse({"detail": "需要 JSON 请求"}, status_code=415)
             body = bytearray()
             limit = 65536
-            if request.url.path.endswith("/attachments"):
+            if request.url.path == "/next/api/knowledge/sources":
+                limit = 196608
+            elif request.url.path.endswith("/attachments"):
                 limit = 9 * 1024 * 1024
             elif request.url.path == "/next/api/workspaces/import":
                 limit = 12 * 1024 * 1024 + 65536
