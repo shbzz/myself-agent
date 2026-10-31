@@ -81,6 +81,62 @@ class AgentManager:
                 self.pool.submit(self.execute, run["id"])
         return run
 
+    def submit_plan(self, body):
+        with self.lock:
+            snapshot = self.store.planning.prepare(body)
+            run, created = self.store.submit(
+                body["session_id"],
+                body["request_id"],
+                body["text"],
+                reasoning_effort=body["reasoning_effort"],
+                action="plan",
+                planning=snapshot,
+            )
+            if created:
+                self.store.event(run["id"], "run.queued", {"action": "plan"})
+                self.pool.submit(self.execute, run["id"])
+            return run
+
+    def approve_plan(self, plan_id, request_id, digest):
+        from myself_agent.jobs import BusyError
+        from myself_agent.planning_store import canonical
+
+        with self.lock:
+            frozen, draft = self.store.planning.approval(plan_id, digest)
+            if draft["executed_run_id"]:
+                previous = self.store.run(draft["executed_run_id"])
+                if previous["request_id"] != request_id:
+                    raise BusyError("计划已执行，请使用原请求编号查询")
+                return previous
+            body = frozen["request"]
+            snapshot = frozen["team_snapshot"] | {
+                "workflow": draft["workflow"],
+                "approved_plan": {
+                    "id": plan_id,
+                    "digest": digest,
+                    "workspace_manifest": frozen["workspace"]["manifest"],
+                },
+            }
+            run, created = self.store.submit(
+                body["session_id"],
+                request_id,
+                body["text"],
+                reasoning_effort=body["reasoning_effort"],
+                action="orchestrate",
+                orchestration=snapshot,
+                plan_approval={
+                    "id": plan_id,
+                    "digest": digest,
+                    "proposal": canonical(draft["workflow"]),
+                },
+            )
+            if created:
+                self.store.event(
+                    run["id"], "run.queued", {"action": "orchestrate", "approved_plan": plan_id}
+                )
+                self.pool.submit(self.execute, run["id"])
+            return run
+
     def execute(self, run_id):
         with self.lock:
             if self.store.run(run_id)["status"] != "queued":
@@ -91,9 +147,10 @@ class AgentManager:
                     [
                         sys.executable,
                         "-m",
-                        "myself_agent.orchestration_runtime"
-                        if self.store.run(run_id)["action"] == "orchestrate"
-                        else "myself_agent.general_runtime",
+                        {
+                            "orchestrate": "myself_agent.orchestration_runtime",
+                            "plan": "myself_agent.planning_runtime",
+                        }.get(self.store.run(run_id)["action"], "myself_agent.general_runtime"),
                         "--root",
                         str(self.store.root),
                         "--run-id",

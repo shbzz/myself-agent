@@ -42,13 +42,9 @@ class OrchestrationStore:
         identifier = body.id or uuid.uuid4().hex
         return self.store.config.write(kind, identifier, body.model_dump() | {"id": identifier})
 
-    def prepare(self, session_id, team_id, workflow_id, effort):
+    def prepare_team(self, session_id, team_id, effort):
         config = self.store.config.resolve(session_id=session_id)
         team = self.store.config.get("team", team_id)
-        workflow = self.store.config.get("workflow", workflow_id)
-        flow = WorkflowInput.model_validate(
-            {k: v for k, v in workflow.items() if k != "version"}
-        ).flow
         agents = []
         for identifier in team["agent_ids"]:
             definition = self.store.config.get("agent", identifier)
@@ -68,11 +64,20 @@ class OrchestrationStore:
             if not model_config["profile"]["tools"]:
                 raise ConfigurationError("Team models must declare tool support")
             agents.append({"definition": definition, "configuration": model_config})
+        return {"configuration": config, "team": team, "agents": agents}
+
+    def prepare(self, session_id, team_id, workflow_id, effort):
+        snapshot = self.prepare_team(session_id, team_id, effort)
+        workflow = self.store.config.get("workflow", workflow_id)
+        flow = WorkflowInput.model_validate(
+            {k: v for k, v in workflow.items() if k != "version"}
+        ).flow
+        agents, config = snapshot["agents"], snapshot["configuration"]
         tasks = list(task_nodes(flow))
         if not any(n.kind == "agent" for n in tasks) or not any(n.kind == "verify" for n in tasks):
             raise ConfigurationError("A run requires both execution and independent verification")
         validate_team(flow, [a["definition"] for a in agents], config)
-        return {"configuration": config, "team": team, "workflow": workflow, "agents": agents}
+        return snapshot | {"workflow": workflow}
 
     def submission(self, session_id, request_id, text, team_id, workflow_id, effort):
         with self.store.connect() as db:

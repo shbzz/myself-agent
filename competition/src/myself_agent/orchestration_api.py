@@ -13,6 +13,7 @@ from myself_agent.orchestration_models import (
     TeamInput,
     WorkflowInput,
 )
+from myself_agent.planning_models import PlanApproval, PlanInput
 
 router = APIRouter(prefix="/next/api/orchestration")
 KINDS = {"agents": "agent", "teams": "team", "workflows": "workflow"}
@@ -80,6 +81,40 @@ def events(run_id: str, request: Request, after: int = Query(0, ge=0)):
             (run_id, after),
         ).fetchall()
     return {"events": [dict(row) | {"payload": json.loads(row["payload"])} for row in rows]}
+
+
+@router.post("/plans", status_code=202)
+def create_plan(body: PlanInput, request: Request):
+    return request.app.state.manager.submit_plan(body.model_dump())
+
+
+@router.get("/plans")
+def plans(request: Request, session_id: str = Query(pattern=r"^[a-f0-9]{32}$")):
+    store = request.app.state.manager.store
+    return {
+        "plans": [
+            store.planning.view(run["id"])
+            for run in store.runs(session_id)
+            if run["action"] == "plan"
+        ]
+    }
+
+
+@router.get("/plans/{plan_id}")
+def plan(plan_id: str, request: Request):
+    return request.app.state.manager.store.planning.view(plan_id)
+
+
+@router.post("/plans/{plan_id}/approve", status_code=202)
+def approve_plan(plan_id: str, body: PlanApproval, request: Request):
+    return request.app.state.manager.approve_plan(plan_id, body.request_id, body.digest)
+
+
+@router.post("/plans/{plan_id}/cancel")
+def cancel_plan(plan_id: str, request: Request):
+    manager = request.app.state.manager
+    manager.store.planning.snapshot(plan_id)
+    return manager.cancel(plan_id)
 
 
 @router.get("/{kind}")
