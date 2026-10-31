@@ -331,6 +331,9 @@ class DeepAgentRunner:
 
 def run_orchestration(store, run_id, config_path=DEFAULT_CONFIG, **kwargs):
     runner = DeepAgentRunner(store, run_id, config_path, **kwargs)
+    approval = runner.snapshot.get("approved_plan")
+    if approval and artifact_manifest(runner.directory) != approval["workspace_manifest"]:
+        raise ConfigurationError("Workspace changed after plan approval; execution refused")
     result = Orchestrator(store, run_id, runner).run()
     result.update(model_calls=runner.budget.calls, usage=runner.usage)
     if not store.orchestration.finish(run_id, result):

@@ -116,3 +116,24 @@ active tasks and result atomically, and public details use one read snapshot.
 Regression tests prove rollback on an injected SQLite failure, cancellation fences,
 concurrent read consistency and preservation of completed rejection evidence.
 The full 172-test home gate passes; no frontend changes or extra paid product run.
+
+## Guarded planning and explicit approval - 2026-10-31
+
+PR #6 is merged. This increment adds a tool-free, one-call planning worker that
+compiles proposals into the existing DSL and appends a host-owned final acceptance
+gate. Plans bind request, frozen team/model/policy, workspace fingerprint and
+workflow into a digest; execution requires explicit matching approval. Stale inputs
+and malformed/over-budget drafts fail closed. A planning_jobs table is additive;
+approval-to-run linking is transactional and idempotent. See PLANNING.md.
+
+No frontend changes. This is pre-execution plan approval, not arbitrary mid-run human
+intervention, knowledge memory or cross-run replay. Planner and executor budgets are
+separate and visible. One bounded live test exhausted its execution budget; a second
+isolated test with narrower role tools passed under the same limit (1 planning + 6
+execution calls; 10976 tokens). Both outcomes remain recorded, not presented as a
+success-rate or speedup claim.
+
+Validation: required home gate passes 195 tests, Ruff lint/format, static JS and
+TypeScript/Vite. The existing LangGraph durability warning remains. Of these,
+23 planning cases cover compilation, approval, concurrency boundaries, secrecy,
+rejection and real Docker final evidence. Frontend sources/assets are unchanged.
