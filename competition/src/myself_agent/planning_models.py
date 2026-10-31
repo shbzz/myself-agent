@@ -56,6 +56,12 @@ def compile_plan(proposal, request, team, identifier):
         raise ConfigurationError("Planner exceeded the approved step budget")
     if any(node.id in {"acceptance_gate", "human_gate"} for node in workflow.flow.nodes):
         raise ConfigurationError("acceptance_gate and human_gate are reserved for the platform")
+    pending = [workflow.flow]
+    while pending:
+        for node in pending.pop().nodes:
+            if node.kind == "human":
+                raise ConfigurationError("Human gates are owned by the platform, not the planner")
+            pending.extend(child for child in (node.body, node.on_true, node.on_false) if child)
     tasks = list(task_nodes(workflow.flow))
     if not any(node.kind == "agent" for node in tasks):
         raise ConfigurationError("A plan must contain an execution task")

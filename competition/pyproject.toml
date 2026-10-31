@@ -22,7 +22,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.15"]
+dev = ["pytest>=8", "ruff>=0.15", "jsonschema==4.26.0"]
 
 [project.scripts]
 myself-agent = "myself_agent.cli:main"
