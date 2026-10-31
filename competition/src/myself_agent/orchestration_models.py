@@ -47,11 +47,16 @@ class AgentInput(Contract):
     system_prompt: str = Field(default="", max_length=8000)
     model_profile_id: str | None = Field(default=None, pattern=ID)
     tools: list[str] = Field(default_factory=list, max_length=12)
+    knowledge_ids: list[Identifier] = Field(default_factory=list, max_length=8)
+    memory_ids: list[Identifier] = Field(default_factory=list, max_length=8)
     max_parallel: int = Field(default=1, ge=1, le=2)
     enabled: bool = True
 
     @model_validator(mode="after")
     def valid(self):
+        for identifiers in (self.knowledge_ids, self.memory_ids):
+            if len(identifiers) != len(set(identifiers)):
+                raise ValueError("Duplicate knowledge or memory references")
         if any(tool not in TOOL_NAMES for tool in self.tools):
             raise ValueError("Unknown Agent tool")
         if any(not skill.strip() or len(skill) > 80 for skill in self.skills):
