@@ -1,3 +1,8 @@
+> Latest candidate, 2026-10-31: PR #9 human verification/continuation/rollback is merged and deployed.
+> This increment adds a private, frozen six-observation comparison CLI and two-module cases.
+> Read EVALUATION.md and RECOVERY.md. Paid comparison results are not yet recorded at this source
+> checkpoint; frontend and contest materials remain. Earlier sections below are historical.
+
 # Development handoff - 2026-10-29
 
 The current baseline is the 0.3 demo: three constrained software tasks, chat
