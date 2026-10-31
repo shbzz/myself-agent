@@ -24,6 +24,7 @@ class PlanInput(Contract):
     acceptance_checks: list[str] = Field(min_length=1, max_length=8)
     max_steps: int = Field(default=48, ge=2, le=96)
     reasoning_effort: str = Field(default="off", pattern=r"^[a-zA-Z0-9_-]{1,24}$")
+    require_human_review: bool = False
 
     @field_validator("verification_skills")
     @classmethod
@@ -53,8 +54,8 @@ def compile_plan(proposal, request, team, identifier):
     agents = [a["definition"] for a in team["agents"]]
     if workflow.max_steps > request["max_steps"]:
         raise ConfigurationError("Planner exceeded the approved step budget")
-    if any(node.id == "acceptance_gate" for node in workflow.flow.nodes):
-        raise ConfigurationError("acceptance_gate is reserved for the platform")
+    if any(node.id in {"acceptance_gate", "human_gate"} for node in workflow.flow.nodes):
+        raise ConfigurationError("acceptance_gate and human_gate are reserved for the platform")
     tasks = list(task_nodes(workflow.flow))
     if not any(node.kind == "agent" for node in tasks):
         raise ConfigurationError("A plan must contain an execution task")
@@ -69,10 +70,22 @@ def compile_plan(proposal, request, team, identifier):
         required_skills=request["verification_skills"],
         checks=request["acceptance_checks"],
     )
+    nodes = [*workflow.flow.nodes, gate]
+    if request.get("require_human_review"):
+        nodes.append(
+            Node(
+                id="human_gate",
+                kind="human",
+                source="acceptance_gate",
+                depends_on=["acceptance_gate"],
+            )
+        )
+        if request["max_steps"] < 3:
+            raise ConfigurationError("Human-reviewed plans need at least three steps")
     compiled = WorkflowInput(
         id="plan-" + identifier,
         name=workflow.name,
-        flow=Flow(nodes=[*workflow.flow.nodes, gate]),
+        flow=Flow(nodes=nodes),
         max_steps=request["max_steps"],
     )
     validate_team(compiled.flow, agents, team["configuration"])

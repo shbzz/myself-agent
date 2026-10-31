@@ -14,6 +14,7 @@ from myself_agent.orchestration_models import (
     WorkflowInput,
 )
 from myself_agent.planning_models import PlanApproval, PlanInput
+from myself_agent.recovery_models import ArtifactRollbackInput, ArtifactSnapshotInput, HumanDecision
 
 router = APIRouter(prefix="/next/api/orchestration")
 KINDS = {"agents": "agent", "teams": "team", "workflows": "workflow"}
@@ -69,6 +70,16 @@ def cancel(run_id: str, request: Request):
     manager = request.app.state.manager
     manager.store.orchestration.snapshot(run_id)
     return manager.cancel(run_id)
+
+
+@router.get("/runs/{run_id}/checkpoints")
+def checkpoints(run_id: str, request: Request):
+    return request.app.state.manager.store.recovery.view(run_id)
+
+
+@router.post("/runs/{run_id}/decisions", status_code=202)
+def human_decision(run_id: str, body: HumanDecision, request: Request):
+    return request.app.state.manager.human_decision(run_id, body.model_dump())
 
 
 @router.get("/runs/{run_id}/events")
@@ -143,3 +154,23 @@ def versions(kind: Literal["agents", "teams", "workflows"], identifier: str, req
             (KINDS[kind], identifier),
         ).fetchall()
     return {"versions": [json.loads(row["value"]) | {"version": row["version"]} for row in rows]}
+
+
+@router.get("/workspaces/{workspace_id}/artifacts")
+def artifacts(workspace_id: str, request: Request):
+    return request.app.state.manager.store.artifacts.view(workspace_id)
+
+
+@router.post("/workspaces/{workspace_id}/snapshots", status_code=201)
+def snapshot_artifacts(workspace_id: str, body: ArtifactSnapshotInput, request: Request):
+    return request.app.state.manager.store.artifacts.create(workspace_id, body.model_dump())
+
+
+@router.post("/workspaces/{workspace_id}/rollbacks")
+def rollback_artifacts(workspace_id: str, body: ArtifactRollbackInput, request: Request):
+    return request.app.state.manager.store.artifacts.rollback(workspace_id, body.model_dump())
+
+
+@router.post("/workspaces/{workspace_id}/rollbacks/{request_id}/reconcile")
+def reconcile_artifacts(workspace_id: str, request_id: str, request: Request):
+    return request.app.state.manager.store.artifacts.reconcile(workspace_id, request_id)

@@ -137,6 +137,19 @@ class AgentManager:
                 self.pool.submit(self.execute, run["id"])
             return run
 
+    def human_decision(self, run_id, body):
+        from myself_agent.jobs import BusyError
+
+        with self.lock:
+            if run_id in self.processes and self.store.run(run_id)["status"] == "waiting_human":
+                raise BusyError("Previous worker is still releasing its resources")
+            decision, schedule = self.store.recovery.decide(
+                run_id, body, actor="authenticated-shared-operator"
+            )
+            if schedule:
+                self.pool.submit(self.execute, run_id)
+            return {"decision": decision, "run": self.store.run(run_id)}
+
     def execute(self, run_id):
         with self.lock:
             if self.store.run(run_id)["status"] != "queued":
@@ -174,9 +187,14 @@ class AgentManager:
                 return
             self.processes[run_id] = process
         try:
-            code = process.wait(
-                timeout=self.store.run_configuration(run_id)["policy"]["timeout_seconds"]
-            )
+            timeout = self.store.run_configuration(run_id)["policy"]["timeout_seconds"]
+            if self.store.run(run_id)["action"] == "orchestrate":
+                checkpoints = self.store.recovery.view(run_id)["checkpoints"]
+                if checkpoints:
+                    timeout = max(
+                        0.1, timeout - checkpoints[-1]["payload"]["runtime"]["active_seconds"]
+                    )
+            code = process.wait(timeout=timeout)
             with self.lock:
                 if self.store.run(run_id)["status"] == "running":
                     status = "succeeded" if code == 0 else "failed"
@@ -227,7 +245,7 @@ class AgentManager:
 
     def cancel(self, run_id, reason="UserStopped"):
         with self.lock:
-            if self.store.run(run_id)["status"] not in ("running", "queued"):
+            if self.store.run(run_id)["status"] not in ("running", "queued", "waiting_human"):
                 return self.store.run(run_id)
             self.store.orchestration.stop(run_id, "cancelled", reason)
             process = self.processes.get(run_id)

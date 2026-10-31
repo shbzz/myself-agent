@@ -65,6 +65,12 @@ class AgentStore:
         from myself_agent.knowledge_store import KnowledgeStore
 
         self.knowledge = KnowledgeStore(self)
+        from myself_agent.recovery_store import RecoveryStore
+
+        self.recovery = RecoveryStore(self)
+        from myself_agent.artifact_store import ArtifactStore
+
+        self.artifacts = ArtifactStore(self)
 
     @staticmethod
     def run_row(row):
@@ -293,6 +299,8 @@ class AgentStore:
                     if not approved or tuple(approved) != (previous["id"], plan_approval["digest"]):
                         raise BusyError("请求编号不属于本次计划批准")
                 return self.run_row(previous), False
+            self.recovery.fence_workspace(db, self.session(session_id)["workspace_id"])
+            self.artifacts.fence_workspace(db, self.session(session_id)["workspace_id"])
             if db.execute("SELECT 1 FROM runs WHERE status IN ('queued','running')").fetchone():
                 raise BusyError("已有任务正在运行，请等待或停止它")
             identifier = uuid.uuid4().hex
