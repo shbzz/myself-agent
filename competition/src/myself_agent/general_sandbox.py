@@ -14,11 +14,16 @@ from deepagents.backends.sandbox import BaseSandbox
 
 
 class WorkspaceSandbox(BaseSandbox):
-    def __init__(self, workspace, image, run_id, tool_timeout=30):
+    def __init__(
+        self, workspace, image, run_id, tool_timeout=30, *, read_only=False, parent_run_id=None
+    ):
         if not re.fullmatch(r"[a-f0-9]{32}", run_id):
             raise ValueError("Invalid run ID")
         if not re.fullmatch(r"python@sha256:[a-f0-9]{64}", image):
             raise ValueError("A pinned Python image is required")
+        if parent_run_id and not re.fullmatch(r"[a-f0-9]{32}", parent_run_id):
+            raise ValueError("Invalid parent run ID")
+        self.read_only, self.parent_run_id = read_only, parent_run_id
         self.workspace = workspace.resolve(strict=True)
         self.image = image
         self.name = "myself-agent-general-" + run_id
@@ -53,8 +58,14 @@ class WorkspaceSandbox(BaseSandbox):
                 "--ulimit=fsize=16777216:16777216",
                 "--tmpfs=/tmp:rw,nosuid,size=32m",
                 "--mount",
-                f"type=bind,src={self.workspace},dst=/workspace",
+                f"type=bind,src={self.workspace},dst=/workspace"
+                + (",readonly" if self.read_only else ""),
                 "--workdir=/workspace",
+                *(
+                    ["--label", "myself-agent.parent=" + self.parent_run_id]
+                    if self.parent_run_id
+                    else []
+                ),
                 self.image,
                 "sleep",
                 "infinity",

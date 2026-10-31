@@ -1,0 +1,183 @@
+{
+  "agents": [
+    {
+      "id": "worker-a",
+      "name": "worker-a",
+      "role": "worker",
+      "skills": [
+        "research",
+        "build"
+      ],
+      "tools": [
+        "ls",
+        "read_file",
+        "write_file",
+        "edit_file"
+      ]
+    },
+    {
+      "id": "worker-b",
+      "name": "worker-b",
+      "role": "worker",
+      "skills": [
+        "research",
+        "build"
+      ],
+      "tools": [
+        "ls",
+        "read_file",
+        "write_file",
+        "edit_file"
+      ]
+    },
+    {
+      "id": "reviewer",
+      "name": "Independent reviewer",
+      "role": "verifier",
+      "skills": [
+        "test"
+      ],
+      "tools": [
+        "read_file"
+      ]
+    }
+  ],
+  "team": {
+    "id": "example-team",
+    "name": "Example only; not registered by default",
+    "agent_ids": [
+      "worker-a",
+      "worker-b",
+      "reviewer"
+    ],
+    "max_parallel": 2
+  },
+  "workflow": {
+    "id": "example-flow",
+    "name": "Parallel inspection and bounded verified delivery",
+    "max_steps": 32,
+    "flow": {
+      "nodes": [
+        {
+          "id": "inspect-a",
+          "prompt": "Inspect /workspace read-only and give a short handoff. Do not create files.",
+          "required_skills": [
+            "research"
+          ],
+          "required_tools": [
+            "ls"
+          ]
+        },
+        {
+          "id": "inspect-b",
+          "prompt": "Inspect /workspace read-only and give a short handoff. Do not create files.",
+          "required_skills": [
+            "research"
+          ],
+          "required_tools": [
+            "ls"
+          ]
+        },
+        {
+          "id": "repair",
+          "kind": "loop",
+          "depends_on": [
+            "inspect-a",
+            "inspect-b"
+          ],
+          "max_iterations": 2,
+          "until": "check",
+          "body": {
+            "nodes": [
+              {
+                "id": "author",
+                "prompt": "For this example only, create /workspace/answer.txt containing exactly 42. Read existing files first.",
+                "required_skills": [
+                  "build"
+                ],
+                "required_tools": [
+                  "write_file"
+                ],
+                "access": "write"
+              },
+              {
+                "id": "check",
+                "kind": "verify",
+                "depends_on": [
+                  "author"
+                ],
+                "prompt": "Read answer.txt and independently assess the exact acceptance target. Return strict boolean JSON.",
+                "required_skills": [
+                  "test"
+                ],
+                "required_tools": [
+                  "read_file"
+                ],
+                "checks": [
+                  "python -I -c \"from pathlib import Path; assert Path('/workspace/answer.txt').read_text().strip() == '42'; print('verified')\""
+                ],
+                "repair_targets": [
+                  "author"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "id": "route",
+          "kind": "condition",
+          "depends_on": [
+            "repair"
+          ],
+          "source": "repair",
+          "on_true": {
+            "nodes": [
+              {
+                "id": "delivery",
+                "kind": "subworkflow",
+                "body": {
+                  "nodes": [
+                    {
+                      "id": "confirm",
+                      "kind": "verify",
+                      "depends_on": [],
+                      "prompt": "Read answer.txt and independently assess the exact acceptance target. Return strict boolean JSON.",
+                      "required_skills": [
+                        "test"
+                      ],
+                      "required_tools": [
+                        "read_file"
+                      ],
+                      "checks": [
+                        "python -I -c \"from pathlib import Path; assert Path('/workspace/answer.txt').read_text().strip() == '42'; print('verified')\""
+                      ]
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          "on_false": {
+            "nodes": [
+              {
+                "id": "failed-confirmation",
+                "kind": "verify",
+                "depends_on": [],
+                "prompt": "Read answer.txt and independently assess the exact acceptance target. Return strict boolean JSON.",
+                "required_skills": [
+                  "test"
+                ],
+                "required_tools": [
+                  "read_file"
+                ],
+                "checks": [
+                  "python -I -c \"from pathlib import Path; assert Path('/workspace/answer.txt').read_text().strip() == '42'; print('verified')\""
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

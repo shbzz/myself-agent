@@ -1,6 +1,7 @@
 """Configurable, auditable compaction using the harness's tool-safe message partitioning."""
 
 import json
+import threading
 
 from langchain.agents.middleware import SummarizationMiddleware
 from langchain_core.callbacks import BaseCallbackHandler
@@ -16,15 +17,17 @@ class CallBudget(BaseCallbackHandler):
     def __init__(self, limit):
         self.limit, self.calls = limit, 0
         self.seen = set()
+        self.lock = threading.Lock()
 
     def on_chat_model_start(self, serialized, messages, **kwargs):
-        identifier = kwargs.get("run_id")
-        if identifier in self.seen:
-            return
-        self.seen.add(identifier)
-        self.calls += 1
-        if self.calls > self.limit:
-            raise ConfigurationError("本轮模型调用预算已用尽（含压缩调用）")
+        identifier = kwargs.get("run_id") or object()
+        with self.lock:
+            if identifier in self.seen:
+                return
+            if self.calls >= self.limit:
+                raise ConfigurationError("本轮模型调用预算已用尽（含压缩调用）")
+            self.seen.add(identifier)
+            self.calls += 1
 
 
 class ContextBudgetError(ConfigurationError):

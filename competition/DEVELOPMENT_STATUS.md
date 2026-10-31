@@ -74,3 +74,45 @@ Host evidence remains outside Git. Do not deploy fixture profiles or test data.
 Next: Agent registration/capabilities, configurable workflow/control structures,
 dynamic planning/scheduling, independent verification/repair, recovery and competition
 baselines. Do not spend the next round on full browser automation or visual redesign.
+
+
+## Backend orchestration increment - 2026-10-30
+
+External tools have landed in main (#5). The next increment adds versioned Agent/team
+and workflow definitions, a bounded declarative scheduler/interpreter for sequential,
+parallel, conditional, loop and nested flows, independent read-only command evidence,
+artifact fingerprints and dependency-scoped feedback repair. All activated producer
+outputs must be covered by successful verification. See ORCHESTRATION.md and the
+validated examples/orchestration.json. No frontend source changes are included.
+
+Required home checks pass: 172 pytest cases, Ruff/format, static JS and TypeScript/Vite.
+The pre-existing LangGraph durability warning remains. Frontend source and asset hashes
+are unchanged. Enabled MCP server IDs/names are handed only to roles with effective
+MCP tools, without endpoint or credential metadata; read-only business-call denial
+and three authorized combinations are covered by deterministic Docker regressions.
+
+Durable APIs, immutable per-run snapshots, shared model/external-operation budgets,
+workspace write leases, cancellation, restart interruption and labelled-container
+cleanup are covered by offline tests and real Docker. A bounded real DeepSeek Flash
+run succeeded through API and supervised worker, rejected a known-bad baseline,
+selected another eligible builder after feedback and independently verified repair.
+Actual: 13 model calls, 20.399 seconds, 25648 tokens (15488 cached input). This is one
+observed run, not a measured success rate or performance improvement.
+
+A separately bounded WorkBuddy DeepSeek V4.1 Flash/max development worker supplied
+25 contract tests, reviewed and verified before integration. Its usage is recorded
+separately, not represented as platform runtime evidence. Host data, credentials,
+paid-run records and deployment scripts stay outside Git. Do not deploy test profiles.
+
+Next: controlled evaluation baselines, knowledge citations, human intervention and
+safe recovery, then frontend orchestration/monitoring. Do not claim distributed
+queues, cross-run replay, vector memory or visual workflow editing are implemented.
+
+### Terminal consistency follow-up - 2026-10-31
+
+A resumed full regression exposed a supervisor race: parent failure was visible
+before its orchestration result. Supervisor stop transitions now commit parent,
+active tasks and result atomically, and public details use one read snapshot.
+Regression tests prove rollback on an injected SQLite failure, cancellation fences,
+concurrent read consistency and preservation of completed rejection evidence.
+The full 172-test home gate passes; no frontend changes or extra paid product run.
