@@ -19,7 +19,7 @@ from myself_agent.general_model import (
 from myself_agent.general_settings import ConfigurationError
 from myself_agent.general_store import AgentStore
 from myself_agent.knowledge_search import retrieve
-from myself_agent.orchestration_models import WorkflowInput
+from myself_agent.planning_schema import proposal_schema
 
 
 @contextmanager
@@ -60,7 +60,7 @@ def run_planning(store, run_id, config_path=DEFAULT_CONFIG, *, model_factory=Non
         },
         "workspace": snapshot["workspace"],
         "knowledge": retrieved,
-        "schema": WorkflowInput.model_json_schema(),
+        "schema": proposal_schema(body["max_steps"], body.get("require_human_review", False)),
     }
     messages = [
         SystemMessage(
@@ -76,7 +76,8 @@ def run_planning(store, run_id, config_path=DEFAULT_CONFIG, *, model_factory=Non
                 "平台会追加 acceptance_gate 执行全部冻结验收；如要求人工审核再追加 human_gate。"
                 "不要占用这两个 ID，不要自己生成 human 节点。"
                 "按 require_human_review 为平台预留1或2个顶层节点、总节点和执行步数。"
-                "无关可选字段应省略；access仅用read/write；kind是节点类型，不是角色或Agent名称。"
+                "必须显式输出max_steps且不超过给定上限，不能依赖默认值。每个节点显式给出kind。"
+                "无关字段必须省略；access仅用read/write；kind是节点类型，不是角色或Agent名称。"
                 "agent节点不要输出checks、repair_targets、source、body、on_true、on_false、until。"
                 "max_iterations只在loop节点设置；其他节点必须省略，不要写1。"
                 "verify必须read权限且带冻结checks；有写文件工具的实施节点必须access=write。"

@@ -1,3 +1,30 @@
+## Planner schema narrowing — 2026-10-31 (candidate)
+
+The model now receives per-kind JSON Schema branches rather than the generic runtime Node
+schema. Irrelevant fields and model-owned human gates are absent; each kind is explicit,
+max_steps is required and capped at the approved budget, and top-level slots are reserved for
+host acceptance/human gates. All bounds/patterns are derived from the existing runtime model.
+The supplied schema is **generation guidance**, not a replacement for runtime authorization:
+WorkflowInput compilation, DAG/nesting/total-node bounds, team/tool eligibility, frozen command
+subsets and exact digest approval still apply. Existing valid stored workflow representations
+remain readable; a second incompatible workflow execution DSL is not introduced.
+
+Compilation additionally refuses any model-generated human node. Only the host can append a
+requested human gate. Explicit approval is still required before execution. Historical invalid
+plans remain failures. This change addresses known schema/prompt mismatches; it does not prove
+the precise cause of older malformed responses whose original text was not retained.
+
+Schema tests use jsonschema as a dev-only dependency. Deterministic checks cover all five
+generated node kinds, absent irrelevant fields, required/capped budgets, non-null control
+bodies, host-only human gates, schema nonmutation and unchanged explicit approval. Paid
+observations, if performed, are reported separately and are not success-rate evidence.
+
+The DS Flash/max schema helper task stopped at its response-length limit without a usable
+file. The supervising agent implemented this module; delegated failure/usage is retained.
+Frontend work is still deferred. Later sections retain historical release evidence.
+
+---
+
 # 受约束规划与明确批准（后端）
 
 该增量复用已有编排 DSL、调度器和独立验证机制，不另造执行引擎，不改前端。
