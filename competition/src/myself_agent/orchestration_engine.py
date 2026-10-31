@@ -15,6 +15,12 @@ class OrchestrationStopped(ConfigurationError):
     pass
 
 
+class OrchestrationPaused(Exception):
+    def __init__(self, checkpoint):
+        self.checkpoint = checkpoint
+        super().__init__("Human verification required")
+
+
 @dataclass
 class TaskRequest:
     node: Node
@@ -37,6 +43,7 @@ def merge_evidence(values):
         "verified_paths",
         "verification_ids",
         "resolved_rejections",
+        "human_decision_ids",
     ):
         result[key] = sorted({item for value in values for item in value.get(key, [])})
     result["rejections"] = {
@@ -131,18 +138,23 @@ class Resources:
 
 
 class Orchestrator:
-    def __init__(self, store, run_id, runner):
+    def __init__(self, store, run_id, runner, *, resume=None):
         self.store, self.run_id, self.runner = store, run_id, runner
         self.definition = store.orchestration.snapshot(run_id)
         self.policy = self.definition["configuration"]["policy"]
         self.resources = Resources(
             self.definition["agents"], self.definition["team"]["max_parallel"]
         )
-        self.steps = 0
+        self.resume = resume
+        self.steps = resume["steps"] if resume else 0
+        if resume:
+            self.resources.assigned.update(resume["assigned"])
         self.stop = threading.Event()
         self.failure = None
         self.failure_lock = threading.Lock()
-        self.deadline = time.monotonic() + self.policy["timeout_seconds"]
+        self.started = time.monotonic()
+        self.elapsed_before = resume["runtime"]["active_seconds"] if resume else 0
+        self.deadline = self.started + self.policy["timeout_seconds"] - self.elapsed_before
         self.pool = None
 
     def check(self):
@@ -177,6 +189,8 @@ class Orchestrator:
                 raise OrchestrationStopped("Run stopped before completion")
             self.emit("finished", summary)
             return summary
+        except OrchestrationPaused:
+            raise
         except Exception as error:
             self.stop.set()
             self.store.orchestration.interrupt(self.run_id, "interrupted", type(error).__name__)
@@ -197,10 +211,65 @@ class Orchestrator:
     def graph(self, flow, prefix, inherited=None, feedback=None, cache=None):
         inherited, feedback = inherited or {}, feedback or {}
         results, pending, futures, ready_since = {}, {n.id: n for n in flow.nodes}, {}, {}
+        if prefix == "root" and self.resume:
+            results = dict(self.resume["results"])
+            node = pending[self.resume["node_id"]]
+            evidence = merge_evidence(results[name] for name in node.depends_on)
+            result = evidence | {
+                "passed": True,
+                "text": "Explicit human approval",
+                "task_path": self.resume["path"],
+            }
+            result["human_decision_ids"] = sorted(
+                set(result["human_decision_ids"]) | {self.resume["decision_id"]}
+            )
+            results[node.id] = result
+            self.store.orchestration.task(
+                self.run_id, self.resume["path"], node, "succeeded", result=result
+            )
+            pending = {key: value for key, value in pending.items() if key not in results}
+            self.emit(
+                "resumed",
+                {
+                    "checkpoint_id": self.resume["checkpoint_id"],
+                    "completed_paths": sorted(results),
+                    "steps": self.steps,
+                },
+            )
         while pending or futures:
             self.check()
             progressed = False
             ready = [node for node in pending.values() if set(node.depends_on) <= results.keys()]
+            gates = [
+                node
+                for node in ready
+                if node.kind == "human"
+                and not merge_evidence(results[name] for name in node.depends_on)["rejections"]
+            ]
+            if gates:
+                # Drain everything already in flight before persisting any continuation.
+                if futures:
+                    done, _ = wait(futures, timeout=0.05, return_when=FIRST_COMPLETED)
+                    for future in done:
+                        results[futures.pop(future)] = future.result()
+                    continue
+                if prefix != "root" or self.resources.active:
+                    raise ConfigurationError("Human gate is not at a quiescent root boundary")
+                node = sorted(gates, key=lambda value: value.id)[0]
+                self.step()
+                path = prefix + "/" + node.id
+                self.store.orchestration.task(self.run_id, path, node, "waiting")
+                raise OrchestrationPaused(
+                    {
+                        "path": path,
+                        "node_id": node.id,
+                        "results": results,
+                        "verification": results[node.source],
+                        "steps": self.steps,
+                        "assigned": dict(self.resources.assigned),
+                        "active_seconds": self.elapsed_before + time.monotonic() - self.started,
+                    }
+                )
             for node in ready:
                 ready_since.setdefault(node.id, time.monotonic())
 

@@ -3,6 +3,7 @@
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 
 from myself_agent.general_settings import ID, ConfigurationError
 
@@ -56,15 +57,24 @@ class AgentInput(Contract):
     def valid(self):
         for identifiers in (self.knowledge_ids, self.memory_ids):
             if len(identifiers) != len(set(identifiers)):
-                raise ValueError("Duplicate knowledge or memory references")
+                raise PydanticCustomError(
+                    "contract_duplicate_knowledge_or_memory_references",
+                    "Duplicate knowledge or memory references",
+                )
         if any(tool not in TOOL_NAMES for tool in self.tools):
-            raise ValueError("Unknown Agent tool")
+            raise PydanticCustomError("contract_unknown_agent_tool", "Unknown Agent tool")
         if any(not skill.strip() or len(skill) > 80 for skill in self.skills):
-            raise ValueError("Skills must be nonempty and at most 80 characters")
+            raise PydanticCustomError(
+                "contract_skills_must_be_nonempty_and_at_most_80_characters",
+                "Skills must be nonempty and at most 80 characters",
+            )
         self.skills = list(dict.fromkeys(skill.strip() for skill in self.skills))
         self.tools = list(dict.fromkeys(self.tools))
         if self.role == "verifier" and not set(self.tools) <= READ_TOOLS:
-            raise ValueError("Verifier file tools must be read-only")
+            raise PydanticCustomError(
+                "contract_verifier_file_tools_must_be_read_only",
+                "Verifier file tools must be read-only",
+            )
         return self
 
 
@@ -77,13 +87,13 @@ class TeamInput(Contract):
     @model_validator(mode="after")
     def distinct(self):
         if len(set(self.agent_ids)) != len(self.agent_ids):
-            raise ValueError("Duplicate team members")
+            raise PydanticCustomError("contract_duplicate_team_members", "Duplicate team members")
         return self
 
 
 class Node(Contract):
     id: str = Field(pattern=ID)
-    kind: Literal["agent", "verify", "condition", "loop", "subworkflow"] = "agent"
+    kind: Literal["agent", "verify", "condition", "loop", "subworkflow", "human"] = "agent"
     depends_on: list[Identifier] = Field(default_factory=list, max_length=16)
     priority: int = Field(default=0, ge=-20, le=20)
     prompt: str = Field(default="", max_length=8000)
@@ -97,54 +107,106 @@ class Node(Contract):
     on_true: "Flow | None" = None
     on_false: "Flow | None" = None
     until: str | None = Field(default=None, pattern=ID)
-    max_iterations: int = Field(default=3, ge=1, le=4)
+    max_iterations: int = Field(
+        default=3,
+        ge=1,
+        le=4,
+        description="Only loop nodes may customize this; omit for other kinds.",
+    )
 
     @field_validator("required_skills")
     @classmethod
     def skills(cls, values):
         if any(not value.strip() or len(value) > 80 for value in values):
-            raise ValueError("Skills must be nonempty and bounded")
+            raise PydanticCustomError(
+                "contract_skills_must_be_nonempty_and_bounded",
+                "Skills must be nonempty and bounded",
+            )
         return list(dict.fromkeys(value.strip() for value in values))
 
     @model_validator(mode="after")
     def shape(self):
         if len(self.depends_on) != len(set(self.depends_on)):
-            raise ValueError("Duplicate dependencies")
+            raise PydanticCustomError("contract_duplicate_dependencies", "Duplicate dependencies")
         if any(tool not in TOOL_NAMES for tool in self.required_tools):
-            raise ValueError("Unknown required tool")
+            raise PydanticCustomError("contract_unknown_required_tool", "Unknown required tool")
         if any(not command.strip() or len(command) > 8000 for command in self.checks):
-            raise ValueError("Verification command must be nonempty and bounded")
+            raise PydanticCustomError(
+                "contract_verification_command_must_be_nonempty_and_bounded",
+                "Verification command must be nonempty and bounded",
+            )
         if self.kind in ("agent", "verify"):
             if not self.prompt.strip() or not self.required_skills:
-                raise ValueError("Agent tasks require a prompt and skills")
+                raise PydanticCustomError(
+                    "node_prompt_skills_required", "Agent tasks require a prompt and skills"
+                )
             if any((self.body, self.on_true, self.on_false, self.source, self.until)):
-                raise ValueError("Agent task cannot contain control fields")
+                raise PydanticCustomError(
+                    "node_task_control_fields", "Agent task cannot contain control fields"
+                )
+        elif self.kind == "human":
+            if not self.source or self.source not in self.depends_on:
+                raise PydanticCustomError(
+                    "contract_human_gate_requires_an_explicit_verification_dependency",
+                    "Human gate requires an explicit verification dependency",
+                )
+            if any((self.body, self.on_true, self.on_false, self.until)):
+                raise PydanticCustomError(
+                    "contract_human_gate_cannot_contain_control_bodies",
+                    "Human gate cannot contain control bodies",
+                )
         elif self.kind == "condition":
             if not self.source or not self.on_true or not self.on_false or self.body or self.until:
-                raise ValueError("Condition requires a source and both branches")
+                raise PydanticCustomError(
+                    "contract_condition_requires_a_source_and_both_branches",
+                    "Condition requires a source and both branches",
+                )
             if self.source not in self.depends_on:
-                raise ValueError("Condition source must be an explicit dependency")
+                raise PydanticCustomError(
+                    "contract_condition_source_must_be_an_explicit_dependency",
+                    "Condition source must be an explicit dependency",
+                )
         elif self.kind == "loop":
             if not self.body or not self.until or self.on_true or self.on_false or self.source:
-                raise ValueError("Loop requires a body and verifier stop condition")
+                raise PydanticCustomError(
+                    "contract_loop_requires_a_body_and_verifier_stop_condition",
+                    "Loop requires a body and verifier stop condition",
+                )
             target = next((n for n in self.body.nodes if n.id == self.until), None)
             if target is None or target.kind != "verify":
-                raise ValueError("Loop stop condition must name a verifier in its body")
+                raise PydanticCustomError(
+                    "contract_loop_stop_condition_must_name_a_verifier_in_its_body",
+                    "Loop stop condition must name a verifier in its body",
+                )
         elif not self.body or any((self.on_true, self.on_false, self.source, self.until)):
-            raise ValueError("Subworkflow requires only a body")
+            raise PydanticCustomError(
+                "contract_subworkflow_requires_only_a_body", "Subworkflow requires only a body"
+            )
         if self.kind not in ("agent", "verify") and (
             self.prompt or self.required_skills or self.required_tools or self.access != "read"
         ):
-            raise ValueError("Control nodes cannot silently ignore Agent task fields")
+            raise PydanticCustomError(
+                "node_control_task_fields", "Control nodes cannot silently ignore Agent task fields"
+            )
         if self.kind != "loop" and self.max_iterations != 3:
-            raise ValueError("Iteration limits belong to loop nodes")
+            raise PydanticCustomError(
+                "node_iteration_scope", "Iteration limits belong to loop nodes"
+            )
         if self.access == "read" and not set(self.required_tools) <= READ_TOOLS:
-            raise ValueError("Read tasks cannot require mutating tools")
+            raise PydanticCustomError(
+                "node_readonly_tools", "Read tasks cannot require mutating tools"
+            )
         if self.kind == "verify":
             if self.access != "read" or not self.checks:
-                raise ValueError("Verification requires read-only access and frozen commands")
+                raise PydanticCustomError(
+                    "node_verification_requirements",
+                    "Verification requires read-only access and frozen commands",
+                )
         elif self.checks or self.repair_targets:
-            raise ValueError("Checks and repair targets belong to verification nodes")
+            raise PydanticCustomError(
+                "node_verifier_only_fields",
+                "Checks and repair targets belong to verification nodes",
+            )
         return self
 
 
@@ -155,12 +217,18 @@ class Flow(Contract):
     def graph(self):
         nodes = {node.id: node for node in self.nodes}
         if len(nodes) != len(self.nodes):
-            raise ValueError("Node IDs must be unique within a flow")
+            raise PydanticCustomError(
+                "contract_node_ids_must_be_unique_within_a_flow",
+                "Node IDs must be unique within a flow",
+            )
         pending, visited = set(nodes), set()
         while pending:
             ready = [name for name in pending if set(nodes[name].depends_on) <= visited]
             if not ready:
-                raise ValueError("Flow has a cycle or an unknown dependency")
+                raise PydanticCustomError(
+                    "contract_flow_has_a_cycle_or_an_unknown_dependency",
+                    "Flow has a cycle or an unknown dependency",
+                )
             visited.update(ready)
             pending.difference_update(ready)
         for node in self.nodes:
@@ -171,14 +239,25 @@ class Flow(Contract):
                     ancestors.add(name)
                     stack.extend(nodes[name].depends_on)
             if not set(node.repair_targets) <= ancestors:
-                raise ValueError("Repair targets must be verification ancestors")
+                raise PydanticCustomError(
+                    "contract_repair_targets_must_be_verification_ancestors",
+                    "Repair targets must be verification ancestors",
+                )
+            if node.kind == "human" and nodes[node.source].kind != "verify":
+                raise PydanticCustomError(
+                    "contract_human_source_must_be_an_independent_verification_node",
+                    "Human source must be an independent verification node",
+                )
             if node.kind == "condition" and nodes[node.source].kind not in (
                 "verify",
                 "loop",
                 "condition",
                 "subworkflow",
             ):
-                raise ValueError("Conditions inspect verification outcomes, not arbitrary code")
+                raise PydanticCustomError(
+                    "contract_conditions_inspect_verification_outcomes_not_arbitrary_code",
+                    "Conditions inspect verification outcomes, not arbitrary code",
+                )
         return self
 
 
@@ -195,8 +274,16 @@ class WorkflowInput(Contract):
         def visit(flow, depth):
             nonlocal count
             if depth > 3:
-                raise ValueError("Workflow nesting exceeds three levels")
+                raise PydanticCustomError(
+                    "contract_workflow_nesting_exceeds_three_levels",
+                    "Workflow nesting exceeds three levels",
+                )
             for node in flow.nodes:
+                if node.kind == "human" and depth != 0:
+                    raise PydanticCustomError(
+                        "contract_human_gates_are_supported_only_at_top_level_quiescent_boundaries",
+                        "Human gates are supported only at top-level quiescent boundaries",
+                    )
                 count += 1
                 for child in (node.body, node.on_true, node.on_false):
                     if child:
@@ -204,7 +291,10 @@ class WorkflowInput(Contract):
 
         visit(self.flow, 0)
         if count > 48:
-            raise ValueError("Workflow definition exceeds 48 nodes")
+            raise PydanticCustomError(
+                "contract_workflow_definition_exceeds_48_nodes",
+                "Workflow definition exceeds 48 nodes",
+            )
         return self
 
 

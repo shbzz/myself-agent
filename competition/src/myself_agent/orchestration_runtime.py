@@ -30,12 +30,16 @@ from myself_agent.general_settings import ConfigurationError
 from myself_agent.general_store import AgentStore
 from myself_agent.knowledge_search import retrieve
 from myself_agent.mcp_tools import MCPAccess
-from myself_agent.orchestration_engine import OrchestrationStopped, Orchestrator
+from myself_agent.orchestration_engine import (
+    OrchestrationPaused,
+    OrchestrationStopped,
+    Orchestrator,
+)
 from myself_agent.orchestration_models import READ_TOOLS
 from myself_agent.web_tools import WebAccess
 
 
-def artifact_manifest(directory):
+def artifact_manifest(directory, *, include_git=False):
     """Hash bounded regular artifacts without following workspace links."""
     entries, total = [], 0
     deadline = time.monotonic() + 10
@@ -43,7 +47,7 @@ def artifact_manifest(directory):
     def walk(fd, prefix):
         nonlocal total
         for name in sorted(os.listdir(fd)):
-            if name == ".git":
+            if name == ".git" and not include_git:
                 continue
             if time.monotonic() > deadline or len(entries) >= 1000:
                 raise ConfigurationError("Artifact inventory limit reached")
@@ -349,11 +353,53 @@ class DeepAgentRunner:
 
 
 def run_orchestration(store, run_id, config_path=DEFAULT_CONFIG, **kwargs):
+    active_started = time.monotonic()
+    resume = store.recovery.claim(run_id)
     runner = DeepAgentRunner(store, run_id, config_path, **kwargs)
+    if resume:
+        counters = resume["runtime"]
+        runner.budget.calls = counters["model_calls"]
+        runner.web.requests = counters["web_requests"]
+        runner.mcp.calls = counters["mcp_calls"]
+        runner.usage = dict(counters["usage"])
     approval = runner.snapshot.get("approved_plan")
-    if approval and artifact_manifest(runner.directory) != approval["workspace_manifest"]:
+    if (
+        not resume
+        and approval
+        and artifact_manifest(runner.directory) != approval["workspace_manifest"]
+    ):
         raise ConfigurationError("Workspace changed after plan approval; execution refused")
-    result = Orchestrator(store, run_id, runner).run()
+    try:
+        result = Orchestrator(store, run_id, runner, resume=resume).run()
+    except OrchestrationPaused as paused:
+        proof = paused.checkpoint["verification"]
+        artifacts = proof.get("artifacts") or {}
+        if (
+            proof.get("passed") is not True
+            or not proof.get("checks")
+            or any(check.get("exit_code") != 0 for check in proof["checks"])
+            or artifacts.get("before") != artifacts.get("after")
+            or artifact_manifest(runner.directory) != artifacts.get("after")
+        ):
+            raise ConfigurationError(
+                "Human checkpoint requires unchanged independent evidence"
+            ) from None
+        manifest = artifact_manifest(runner.directory, include_git=True)
+        elapsed_before = resume["runtime"]["active_seconds"] if resume else 0
+        runtime = {
+            "model_calls": runner.budget.calls,
+            "web_requests": runner.web.requests,
+            "mcp_calls": runner.mcp.calls,
+            "usage": runner.usage,
+            "active_seconds": elapsed_before + time.monotonic() - active_started,
+        }
+        store.recovery.pause(
+            run_id,
+            paused.checkpoint,
+            runtime,
+            manifest,
+        )
+        return {"status": "waiting_human", "passed": None, **runtime}
     result.update(model_calls=runner.budget.calls, usage=runner.usage)
     if not store.orchestration.finish(run_id, result):
         raise OrchestrationStopped("Run stopped before final usage commit")
@@ -379,7 +425,7 @@ def main():
     store = AgentStore(args.root)
     try:
         result = run_orchestration(store, args.run_id, args.config)
-        if result["passed"] is not True:
+        if result.get("status") != "waiting_human" and result["passed"] is not True:
             raise SystemExit(2)
     except Exception as error:
         store.event(args.run_id, "run.error", {"error_type": type(error).__name__})

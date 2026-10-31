@@ -175,3 +175,13 @@ warning remains. Frontend sources and built CSS/JS hashes are unchanged. A too-b
 new assertion initially matched `999` inside a random message UUID; it now checks
 the full replacement-source sentence. The original failed log is retained outside
 Git; no product behavior or independent acceptance was relaxed.
+
+
+## Human verification and recovery candidate — 2026-10-31
+
+Backend candidate on codex/human-recovery: explicit top-level human barriers, durable
+approval/rejection, checkpoint continuation without replay and with cumulative budgets,
+and bounded artifact snapshots with atomic exchange, retained old content and crash fences.
+Generated plans can request a host-owned human gate. See RECOVERY.md for supported boundaries
+and APIs. Production is not changed merely by this source increment. Validation and release
+status are recorded separately; controlled comparisons, frontend and contest materials remain.

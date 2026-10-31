@@ -45,6 +45,7 @@ def run_planning(store, run_id, config_path=DEFAULT_CONFIG, *, model_factory=Non
         "acceptance_checks": body["acceptance_checks"],
         "verification_skills": body["verification_skills"],
         "max_steps": body["max_steps"],
+        "require_human_review": body.get("require_human_review", False),
         "agents": [
             {key: agent[key] for key in ("id", "name", "role", "skills", "tools", "enabled")}
             for agent in agents
@@ -72,8 +73,13 @@ def run_planning(store, run_id, config_path=DEFAULT_CONFIG, *, model_factory=Non
                 "如引用知识编号，只写在节点prompt中，不得增加schema未定义字段。"
                 "不要写死示例，按真实需求拆解任务、显式依赖、读写权限与必要的有界修复。"
                 "verify 节点只能使用给定 acceptance_checks 的原文子集，不能降低或另造验收。"
-                "平台会在所有顶层节点之后追加 acceptance_gate，执行全部冻结验收；不要占用此 ID。"
-                "为该节点预留一个顶层节点、一个总节点和执行步数，最多15个顶层节点。"
+                "平台会追加 acceptance_gate 执行全部冻结验收；如要求人工审核再追加 human_gate。"
+                "不要占用这两个 ID，不要自己生成 human 节点。"
+                "按 require_human_review 为平台预留1或2个顶层节点、总节点和执行步数。"
+                "无关可选字段应省略；access仅用read/write；kind是节点类型，不是角色或Agent名称。"
+                "agent节点不要输出checks、repair_targets、source、body、on_true、on_false、until。"
+                "max_iterations只在loop节点设置；其他节点必须省略，不要写1。"
+                "verify必须read权限且带冻结checks；有写文件工具的实施节点必须access=write。"
                 "最终工作流经用户确认之前不会执行。不得声称已经完成任务或验证通过。"
                 "\n规划角色配置：" + planner["system_prompt"]
             )
@@ -106,7 +112,11 @@ def run_planning(store, run_id, config_path=DEFAULT_CONFIG, *, model_factory=Non
         raise ConfigurationError("Planner response was incomplete")
     if not isinstance(response.content, str) or len(response.content.encode()) > 65536:
         raise ConfigurationError("Invalid or oversized planning proposal")
-    proposal = json.loads(response.content)
+    try:
+        proposal = json.loads(response.content)
+    except json.JSONDecodeError:
+        store.event(run_id, "plan.invalid", {"stage": "json_decode"})
+        raise
     try:
         digest = store.planning.finish(run_id, proposal, observed_usage)
     except ValidationError as error:
@@ -118,6 +128,38 @@ def run_planning(store, run_id, config_path=DEFAULT_CONFIG, *, model_factory=Non
                 "stage": "proposal_schema",
                 "error_types": sorted({item["type"] for item in error.errors()}),
                 "error_count": error.error_count(),
+                "locations": [
+                    [
+                        part
+                        if isinstance(part, int)
+                        or part
+                        in {
+                            "id",
+                            "name",
+                            "flow",
+                            "nodes",
+                            "kind",
+                            "depends_on",
+                            "priority",
+                            "prompt",
+                            "required_skills",
+                            "required_tools",
+                            "access",
+                            "checks",
+                            "repair_targets",
+                            "source",
+                            "body",
+                            "on_true",
+                            "on_false",
+                            "until",
+                            "max_iterations",
+                            "max_steps",
+                        }
+                        else "<field>"
+                        for part in item["loc"][:12]
+                    ]
+                    for item in error.errors()[:24]
+                ],
             },
         )
         raise

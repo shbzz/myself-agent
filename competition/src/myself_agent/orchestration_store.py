@@ -201,6 +201,12 @@ class OrchestrationStore:
                 "(SELECT 1 FROM runs WHERE id=? AND status IN ('queued','running'))",
                 (json.dumps(result, ensure_ascii=False), run_id, run_id),
             )
+            if updated.rowcount and result.get("status") in ("succeeded", "rejected"):
+                db.execute(
+                    "UPDATE human_checkpoints SET state='consumed' WHERE run_id=? "
+                    "AND state='resuming'",
+                    (run_id,),
+                )
             return updated.rowcount == 1
 
     @staticmethod
@@ -236,11 +242,21 @@ class OrchestrationStore:
             db.execute("BEGIN IMMEDIATE")
             updated = db.execute(
                 "UPDATE runs SET status=?,updated=?,error_type=? "
-                "WHERE id=? AND status IN ('queued','running')",
+                "WHERE id=? AND status IN ('queued','running','waiting_human')",
                 (status, now(), reason, run_id),
             )
             if not updated.rowcount:
                 return False
+            db.execute(
+                "UPDATE human_checkpoints SET state=? WHERE run_id=? "
+                "AND state IN ('waiting','approved','resuming')",
+                (status, run_id),
+            )
+            db.execute(
+                "UPDATE orchestration_tasks SET status=?,updated=? WHERE run_id=? "
+                "AND status='waiting'",
+                (status, now(), run_id),
+            )
             self._interrupt(db, run_id, status, reason, preserve_result=status == "failed")
             return True
 

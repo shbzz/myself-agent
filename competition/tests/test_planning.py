@@ -6,6 +6,7 @@ from contextlib import contextmanager
 import pytest
 from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage
+from pydantic import ValidationError
 from test_general import ScriptModel, call
 from test_orchestration_api import QueuedManager
 from test_orchestration_engine import new_workflow, review, work
@@ -333,3 +334,36 @@ def test_approved_plan_cannot_take_a_second_global_run_lease(tmp_path):
     assert manager.store.planning.view(run["id"])["executed_run_id"] is None
     manager.cancel(other["id"])
     assert manager.approve_plan(run["id"], uuid.uuid4().hex, digest)["status"] == "queued"
+
+
+def test_host_owned_human_gate_is_bound_to_approved_plan(tmp_path):
+    manager, body, proposal, _ = planning_case(tmp_path)
+    body["require_human_review"] = True
+    run, plan_digest = finish_plan(manager, body, proposal)
+    draft = manager.store.planning.view(run["id"])
+    nodes = draft["workflow"]["flow"]["nodes"]
+    assert nodes[-2]["id"] == "acceptance_gate"
+    assert nodes[-1]["kind"] == "human" and nodes[-1]["source"] == "acceptance_gate"
+    assert nodes[-1]["depends_on"] == ["acceptance_gate"]
+    approved = manager.approve_plan(run["id"], uuid.uuid4().hex, plan_digest)
+    assert manager.store.orchestration.snapshot(approved["id"])["workflow"] == draft["workflow"]
+
+
+def test_planning_reports_static_node_error_code_without_generated_values(tmp_path):
+    manager, body, proposal, _ = planning_case(tmp_path)
+    proposal["flow"]["nodes"][0]["max_iterations"] = 1
+    run = manager.submit_plan(body)
+    manager.store.status(run["id"], "running")
+    model = ScriptModel(responses=[AIMessage(content=json.dumps(proposal))])
+
+    @contextmanager
+    def factory():
+        yield model
+
+    with pytest.raises(ValidationError):
+        run_planning(manager.store, run["id"], model_factory=factory)
+    events = manager.store.events(body["session_id"])
+    invalid = next(e["payload"] for e in events if e["kind"] == "plan.invalid")
+    assert invalid["error_types"] == ["node_iteration_scope"]
+    assert invalid["locations"] == [["flow", "nodes", 0]]
+    assert "input" not in invalid and "ctx" not in invalid
