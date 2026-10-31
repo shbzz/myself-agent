@@ -1,4 +1,4 @@
-## Planner schema narrowing — 2026-10-31 (candidate)
+## Planner schema narrowing — 2026-10-31 (verified source; deployment tracked separately)
 
 The model now receives per-kind JSON Schema branches rather than the generic runtime Node
 schema. Irrelevant fields and model-owned human gates are absent; each kind is explicit,
@@ -22,6 +22,26 @@ observations, if performed, are reported separately and are not success-rate evi
 The DS Flash/max schema helper task stopped at its response-length limit without a usable
 file. The supervising agent implemented this module; delegated failure/usage is retained.
 Frontend work is still deferred. Later sections retain historical release evidence.
+
+### Actual observations for the narrowed schema
+
+Source `410850e0cad36a9c5e4ebc64e5d6811e180f72a7` passed 327 home tests (19 new
+schema/authority cases), Ruff/format/static JS/TypeScript/Vite. No frontend source/assets changed.
+Two separately preregistered one-call planning observations, no execution and no retry:
+
+| Synthetic request | Runtime result | Model-facing schema | Tokens | Seconds |
+| --- | --- | --- | ---: | ---: |
+| Knowledge-aware one-task plan + host human gate | Valid inert proposal | Pass | 3465 | 3.152 |
+| Knowledge-aware two-iteration repair loop + host human gate | JSONDecodeError; no proposal | Fail before validation | 3705 | 3.172 |
+
+Total 2 calls, 7170 tokens, 128 cached input. Both provider usages are observed.
+The loop response was captured in the private synthetic evidence; parsing reported
+`Expecting ',' delimiter` at line 1, column 1167. It was not repaired or retried into success.
+Public usage/status/response hashes: `evaluation/planner-schema-2026-10-31.json`.
+These two observations do not establish a success rate or a reliable-generation guarantee.
+Schema narrowing does not guarantee valid JSON text; complex automatic planning remains an
+explicit limitation. User-authored code workflows and safe rejection remain available.
+Older mixed planning observations are retained, not replaced by this pair.
 
 ---
 

@@ -1,3 +1,13 @@
+> Current checkpoint — 2026-10-31: PR #10 comparative evidence is merged.
+> Planner source now narrows model-facing fields by kind, requires the approved step cap,
+> and refuses model-created human gates; host confirmation/verification boundaries remain.
+> 327 home tests pass. Two actual one-call planning observations: one valid knowledge plan,
+> one malformed loop JSON rejected without execution; not a reliability/superiority claim.
+> Read PLANNING.md and EVALUATION_RESULTS_20261031.md for all retained results.
+> No frontend source change. Next: real orchestration/knowledge/recovery UI, then final
+> Chinese PDF (>=5000 characters), 10–15-page PPT and 3–5-minute real demonstration video.
+> Deployment status is separate; do not infer deployment from merging or this document.
+
 > Current checkpoint — 2026-10-31: six frozen real comparison observations are complete.
 > Single 2/2 accepted; fixed team 0/2 and custom 0/2 under the shared 12-call/run cap;
 > 5/6 artifacts pass final checks, but incomplete orchestration remains failure.

@@ -1,0 +1,75 @@
+{
+  "source_commit": "410850e0cad36a9c5e4ebc64e5d6811e180f72a7",
+  "protocol_sha256": "dcbfa0793d99a18ff461bfc74940d540b3dd0958de5f1dd7c533dff0b023e5b5",
+  "script_hashes": {
+    "knowledge": "c9ae10675caa2bc24815d1321a966b02513183ac0374026d959be834d75c7f74",
+    "loop": "7e9650ae9ad6051ed7c01653347d2cdb9b005781843f2e2c20af746d8905d8fe"
+  },
+  "date": "2026-10-31",
+  "model": "deepseek-flash",
+  "reasoning": "off",
+  "total_call_cap": 2,
+  "automatic_retries": 0,
+  "no_execution": true,
+  "observations": [
+    {
+      "case": "knowledge",
+      "status": "succeeded",
+      "usage": {
+        "model_calls": 1,
+        "provider_usage_available": true,
+        "usage": {
+          "deepseek-flash": {
+            "input_token_details": {
+              "cache_read": 0
+            },
+            "input_tokens": 3202,
+            "output_token_details": {},
+            "output_tokens": 263,
+            "total_tokens": 3465
+          }
+        }
+      },
+      "invalid": [],
+      "schema_valid": true,
+      "schema_error_types": [],
+      "direct_runner_diagnostic": true,
+      "no_execution": true,
+      "seconds": 3.152434,
+      "response_sha256": "793e967609a61f08b3bf6601b9a3aeb380d0b3b8aace8aea949f1f19cc0e617d"
+    },
+    {
+      "case": "loop",
+      "status": "failed",
+      "usage": {
+        "model_calls": 1,
+        "provider_usage_available": true,
+        "usage": {
+          "deepseek-flash": {
+            "input_token_details": {
+              "cache_read": 128
+            },
+            "input_tokens": 3270,
+            "output_token_details": {},
+            "output_tokens": 435,
+            "total_tokens": 3705
+          }
+        }
+      },
+      "invalid": [
+        {
+          "stage": "json_decode"
+        }
+      ],
+      "schema_valid": false,
+      "schema_error_types": [
+        "JSONDecodeError"
+      ],
+      "direct_runner_diagnostic": true,
+      "no_execution": true,
+      "seconds": 3.171517,
+      "response_sha256": "783e3b30b2b8be021373ee219f50d66ca3d90f82f10c92fd75df943a4d68c373"
+    }
+  ],
+  "comparative_superiority_established": false
+}
