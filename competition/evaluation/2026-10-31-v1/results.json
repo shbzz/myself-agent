@@ -1,0 +1,383 @@
+{
+  "version": 1,
+  "observed_date": "2026-10-31",
+  "source_commit": "8d7d3c8814303e8422106a814b1e3d392cef2d75",
+  "protocol_sha256": "cba9912c6fe2d8f739e1918f75bb15a1c75cda20faaca20cbccb85b683439fdb",
+  "source_hashes": {
+    "src/myself_agent/__init__.py": "20b444ff48c816af7bcf8d23ee36acf1119a6d48dfa78904c85aab8b690da0db",
+    "src/myself_agent/__main__.py": "bf483bbe0170bb3dadc8d5cd65a511e4dfca4030fa3dbf3b81bd5439af84468a",
+    "src/myself_agent/acceptance/report_runner.py": "751c58fd1b3eea9990aa753777ad0d0853d9be30f0e09f14a1ecc9d9a2cf91f5",
+    "src/myself_agent/acceptance/runner.py": "bee5e1f6577df153850e3c8883608087453319c67ca4e099da2d95331c7f594b",
+    "src/myself_agent/acceptance/text_runner.py": "33eeef219f817a4cfabbb0e3732f16831440b2cded4c909b51df2c047403beb0",
+    "src/myself_agent/artifact_store.py": "eaa2af3b25a1fd23e27845dadebeda95ba4ebf19214a7f612a094a6fdbdf9071",
+    "src/myself_agent/cli.py": "ed03da4edcbb9ac878cc00c13b1e4b7d6df60bc9ae973c544a0ca788ff82802a",
+    "src/myself_agent/config.py": "5d89a473758882376465ce8aadd08866a682c4b5521442308ed17fadd0e0a934",
+    "src/myself_agent/evaluation.py": "cb7d878b58fa5401886fc896eb9f10286c428c6bcaf16062d9ffb21581c8a148",
+    "src/myself_agent/evaluation_cases.py": "3fa01c7bfb0ff984cde1b1ec8287e90702ccebbc19f7acfd25f2e3885cdc5e00",
+    "src/myself_agent/evaluation_cli.py": "9e8f3a3d40af827735b2aa5fb3f5d32d6d226274b63b7afd45076a10c39828ba",
+    "src/myself_agent/evaluation_metrics.py": "574e0aa6bcdd6b8f5dd9a9e6a6bdc5b5743254f088aa7ba27dc8a32e480d86a7",
+    "src/myself_agent/external_tools.py": "d09f037c6b1a3faa49c8af98a6ed2713d6bbff4490bf5e3d961fd461f37ff80f",
+    "src/myself_agent/general_context.py": "db67122ec5e4e5328cb6551339e85c33b5d447d664da1f9d3b21233edc7f4908",
+    "src/myself_agent/general_manager.py": "219c2d4ab9dc4a4f3def203a405101973ab0f2c8009b72aa401a6ee3c04f5f18",
+    "src/myself_agent/general_model.py": "374a70187e2be14d5faad14f34bc49dbc1455f2b2339a42d04d37a6ecad16691",
+    "src/myself_agent/general_runtime.py": "209cab9da2c096004317e752efa46f5f98998d9604383c633fa3441546d2d62f",
+    "src/myself_agent/general_sandbox.py": "ead2f44d3625114d6cbf195a5c33325e1cd18cca1945a19d7940c5f164c6be2c",
+    "src/myself_agent/general_settings.py": "d8fb964f84a61aadea719946feb00bec2839595c29051e4918b31b461589e05b",
+    "src/myself_agent/general_store.py": "ffa18c2fc1005c2ea60432c869406f5ab4855d0ab84d09c6ac3b260f7019173e",
+    "src/myself_agent/general_web.py": "2f1d4fc1ef456a20a0ebf6577440f2eec05c08fd414e1d3c83172b7838eb7b3d",
+    "src/myself_agent/jobs.py": "baea1e4f26cbffe687d7db14c304c75e89cfe644b7a8edbcbd2c0b5f6e18986e",
+    "src/myself_agent/knowledge_api.py": "5faacef7b588d85cdfa259c426fc0c4a7ca06c28172fe3f831419b491950e9b8",
+    "src/myself_agent/knowledge_models.py": "f1466b51eefabf44faa8e7d4aacb40a1238ee6c5a605e69aa57613e5b7991979",
+    "src/myself_agent/knowledge_search.py": "9bb89e6f755c6cfe942de1787e1e265673b11eb7d811927c4305cd5ee317e8c9",
+    "src/myself_agent/knowledge_store.py": "01ade3d89ceb4d7207d1f6f1bb17bd7e2aec5a5ca48d8d08204a4e74ca3353fe",
+    "src/myself_agent/mcp_tools.py": "0195dda7de57d6739c3576ec7c2163fb41e94671c993a9b50212b6697ca2e36c",
+    "src/myself_agent/orchestration_api.py": "9e00a0dc55392f7eec3df0a062bc4fff1e5e0ae5b653e40760bdc9a21d3af5e4",
+    "src/myself_agent/orchestration_engine.py": "95de3ebe901c272d38ee71125b463ee91f30c5a84e377ae9f70c0e2b2f9636b5",
+    "src/myself_agent/orchestration_models.py": "bd01387d8a3241ccc17f25cfc209cc61d0010e79f2b68b8612ea86a5aa7d0f1e",
+    "src/myself_agent/orchestration_runtime.py": "081b0f5c5c5b89a0c114815f4b9b50eca00fa5cf60789e7352ed4e78468d5877",
+    "src/myself_agent/orchestration_store.py": "c923b48e519efa2ff813652ff5e05b95ab2225b3bfa20dc8baa3ee39db41f0b7",
+    "src/myself_agent/planning_models.py": "70ff6ec49f3c3db82da0e4c9d01b787a88b00cd035fd462a6ad13de16f16d8bf",
+    "src/myself_agent/planning_runtime.py": "1097ece6c24bc623a4083378211889a315804ac6da3d647a6cf24dc9b05f3993",
+    "src/myself_agent/planning_store.py": "f61e0aeb006b91f2d54f67a59e703de9f4325dd98a786d40f07e3e204bf64a05",
+    "src/myself_agent/provider.py": "fa75f0572fe03b45c03714f153918f26328c5b3e377fe6957ddf8914ea4f51a1",
+    "src/myself_agent/recovery_models.py": "4ba0e72a5a8cfe1c610a58027bb957f53998c2941376dcf499eed92e6fcd2ad1",
+    "src/myself_agent/recovery_store.py": "734b06cd5636b58d6490af85f64e83b325ce1dd55cffc7e7ee01f6ba2bc6e8b0",
+    "src/myself_agent/sandbox.py": "ed3cc0cc42a185fca276de486456548f5785e3e57ca442bebc4570063cf929e7",
+    "src/myself_agent/scenarios.py": "a7b89c1bd7a37b53f258c63726b43e7ed10305cb183f3885b6bef86da0feeda7",
+    "src/myself_agent/scheduler.py": "f49287d5f7424185c514278d386c03a35b4681dc538e8ea44ea5d105e496cd1f",
+    "src/myself_agent/schema.py": "516adc44e8f748750274d691775418d7fed84e655fc30824e6775e1c239c7eeb",
+    "src/myself_agent/tracking.py": "72f47ea0c1e8ed7543020267bfa21fcecce08602c01631629499f19c5e971988",
+    "src/myself_agent/web.py": "63367a23ad512ac4b0e66d3026985d60b75ef6f85c8f3bafd43cdca623a18ab3",
+    "src/myself_agent/web_tools.py": "0681ad99a2214ec65d11da857bd99f4b8dc3d4c0b43ca5abca4c45d5557be692",
+    "src/myself_agent/workflow.py": "b2751a45ad34a3e0220c21504dbf92ea075747d04d1a7e5a2703e30a1e8e0488",
+    "src/myself_agent/workspace_files.py": "74e53a7916e44e9295d4846d2e9eb446441b7d0457d062e12f48065c57f6cabd",
+    "pyproject.toml": "a80eaace345b75945fa81df7da1409c2d5654fa7227ba25fd7b0a23a1693c3a1"
+  },
+  "case_hashes": {
+    "orders-v1": "08fd5755ac251de55426f0db7041729092365c5cf18af7a3590c98447f5f13fe",
+    "events-v1": "1dea2e689110ec5a7f9144d2c24c57a66f9cbbd132baa588f4c01e7273296c60"
+  },
+  "environment": {
+    "python": "3.11.2",
+    "packages": {
+      "langgraph": "1.2.18",
+      "deepagents": "0.7.32",
+      "langchain-deepseek": "1.1.1",
+      "langchain-core": "1.7.1",
+      "pydantic": "2.14.1"
+    },
+    "image": "python@sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60",
+    "image_id": "sha256:673719e071ecf27434fd2635bbd8d00f49f4fdd81f243143438a42ced8bedf60"
+  },
+  "conditions": {
+    "model": "deepseek-flash",
+    "reasoning_effort": "off",
+    "max_model_calls_per_run": 12,
+    "max_total_model_calls": 72,
+    "active_seconds_per_run": 90,
+    "context_tokens": 32768,
+    "output_reserve_tokens": 1800,
+    "repeat_per_condition": 1,
+    "automatic_retries": 0
+  },
+  "complete": true,
+  "observations": [
+    {
+      "slot": "00-orders-v1-single",
+      "case_id": "orders-v1",
+      "variant": "single",
+      "repeat": 1,
+      "accepted": true,
+      "artifact_checks_passed": true,
+      "reported_passed": true,
+      "error_type": null,
+      "seconds": 28.145445,
+      "active_seconds": 24.498931,
+      "model_calls": 9,
+      "total_tokens": 50922,
+      "cached_input_tokens": 42240,
+      "usage_complete": true,
+      "tool_calls": 9,
+      "tool_errors": 2,
+      "reused_tasks": 0,
+      "case_sha256": "08fd5755ac251de55426f0db7041729092365c5cf18af7a3590c98447f5f13fe",
+      "observation_sha256": "9033ca6a44891e408da198317fc5511ff906509398612a859f8cf0d24ea45412",
+      "repair_event_count": 0,
+      "final_checks": [
+        {
+          "command_sha256": "314cb1f8837f819e46ab0d8f8edab8584c03b804d1e96bc8e9f72a2582a77a78",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "0ba37da08bc32ceeb14f642485ed6b9cf5606f037ae54979926c077ec6cd58c3",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "53e78165394af63daeca88b2aa172ac043e2a18d0ece9674454e1acf36dd7ec7",
+          "exit_code": 0,
+          "marker_present": true
+        }
+      ],
+      "fingerprints_stable": true,
+      "unexpected_artifacts": [],
+      "budget_exhaustion_logged": false
+    },
+    {
+      "slot": "01-events-v1-custom",
+      "case_id": "events-v1",
+      "variant": "custom",
+      "repeat": 1,
+      "accepted": false,
+      "artifact_checks_passed": true,
+      "reported_passed": null,
+      "error_type": "ConfigurationError",
+      "seconds": 31.837617,
+      "active_seconds": 28.184448,
+      "model_calls": 12,
+      "total_tokens": 52782,
+      "cached_input_tokens": 42752,
+      "usage_complete": true,
+      "tool_calls": 12,
+      "tool_errors": 0,
+      "reused_tasks": 0,
+      "case_sha256": "1dea2e689110ec5a7f9144d2c24c57a66f9cbbd132baa588f4c01e7273296c60",
+      "observation_sha256": "f71f3ed9efb5d0eda0fde8bdbd08947ced2b42c368336ab39712697bbaf75a63",
+      "repair_event_count": 0,
+      "final_checks": [
+        {
+          "command_sha256": "80adb82b9c42b06057ce390200bd770ef833ed34eeb2649ed7719b6cb9b2b4a9",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "de7eeb8d8898179cd7cac6c2fc1ae63d217f53de1f34979c33eb88919176eae1",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "0c8e8b55f65b3f2799a6b91cb1a0a25d948855c060e4512935ffa985040cb04c",
+          "exit_code": 0,
+          "marker_present": true
+        }
+      ],
+      "fingerprints_stable": true,
+      "unexpected_artifacts": [],
+      "budget_exhaustion_logged": true
+    },
+    {
+      "slot": "02-orders-v1-fixed_team",
+      "case_id": "orders-v1",
+      "variant": "fixed_team",
+      "repeat": 1,
+      "accepted": false,
+      "artifact_checks_passed": true,
+      "reported_passed": null,
+      "error_type": "ConfigurationError",
+      "seconds": 33.584919,
+      "active_seconds": 29.788537,
+      "model_calls": 12,
+      "total_tokens": 57672,
+      "cached_input_tokens": 49664,
+      "usage_complete": true,
+      "tool_calls": 12,
+      "tool_errors": 1,
+      "reused_tasks": 0,
+      "case_sha256": "08fd5755ac251de55426f0db7041729092365c5cf18af7a3590c98447f5f13fe",
+      "observation_sha256": "681f5b5cec9f9b277d20375a8eebfdf249b1a273cc12db7439187147e309eefb",
+      "repair_event_count": 0,
+      "final_checks": [
+        {
+          "command_sha256": "314cb1f8837f819e46ab0d8f8edab8584c03b804d1e96bc8e9f72a2582a77a78",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "0ba37da08bc32ceeb14f642485ed6b9cf5606f037ae54979926c077ec6cd58c3",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "53e78165394af63daeca88b2aa172ac043e2a18d0ece9674454e1acf36dd7ec7",
+          "exit_code": 0,
+          "marker_present": true
+        }
+      ],
+      "fingerprints_stable": true,
+      "unexpected_artifacts": [],
+      "budget_exhaustion_logged": true
+    },
+    {
+      "slot": "03-events-v1-single",
+      "case_id": "events-v1",
+      "variant": "single",
+      "repeat": 1,
+      "accepted": true,
+      "artifact_checks_passed": true,
+      "reported_passed": true,
+      "error_type": null,
+      "seconds": 18.330943,
+      "active_seconds": 14.409321,
+      "model_calls": 5,
+      "total_tokens": 22895,
+      "cached_input_tokens": 19072,
+      "usage_complete": true,
+      "tool_calls": 6,
+      "tool_errors": 0,
+      "reused_tasks": 0,
+      "case_sha256": "1dea2e689110ec5a7f9144d2c24c57a66f9cbbd132baa588f4c01e7273296c60",
+      "observation_sha256": "da8f227a28d4071e633945f49805f4fa431205ecf2d5495fb69cbd0c7d591085",
+      "repair_event_count": 0,
+      "final_checks": [
+        {
+          "command_sha256": "80adb82b9c42b06057ce390200bd770ef833ed34eeb2649ed7719b6cb9b2b4a9",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "de7eeb8d8898179cd7cac6c2fc1ae63d217f53de1f34979c33eb88919176eae1",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "0c8e8b55f65b3f2799a6b91cb1a0a25d948855c060e4512935ffa985040cb04c",
+          "exit_code": 0,
+          "marker_present": true
+        }
+      ],
+      "fingerprints_stable": true,
+      "unexpected_artifacts": [],
+      "budget_exhaustion_logged": false
+    },
+    {
+      "slot": "04-orders-v1-custom",
+      "case_id": "orders-v1",
+      "variant": "custom",
+      "repeat": 1,
+      "accepted": false,
+      "artifact_checks_passed": true,
+      "reported_passed": null,
+      "error_type": "ConfigurationError",
+      "seconds": 34.915041,
+      "active_seconds": 31.204865,
+      "model_calls": 12,
+      "total_tokens": 59998,
+      "cached_input_tokens": 52096,
+      "usage_complete": true,
+      "tool_calls": 13,
+      "tool_errors": 3,
+      "reused_tasks": 0,
+      "case_sha256": "08fd5755ac251de55426f0db7041729092365c5cf18af7a3590c98447f5f13fe",
+      "observation_sha256": "ceeb65bd0f9164a4f32ea55a944fcf9a12a671570a6d2c2fe4ceafae18d232fa",
+      "repair_event_count": 0,
+      "final_checks": [
+        {
+          "command_sha256": "314cb1f8837f819e46ab0d8f8edab8584c03b804d1e96bc8e9f72a2582a77a78",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "0ba37da08bc32ceeb14f642485ed6b9cf5606f037ae54979926c077ec6cd58c3",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "53e78165394af63daeca88b2aa172ac043e2a18d0ece9674454e1acf36dd7ec7",
+          "exit_code": 0,
+          "marker_present": true
+        }
+      ],
+      "fingerprints_stable": true,
+      "unexpected_artifacts": [],
+      "budget_exhaustion_logged": true
+    },
+    {
+      "slot": "05-events-v1-fixed_team",
+      "case_id": "events-v1",
+      "variant": "fixed_team",
+      "repeat": 1,
+      "accepted": false,
+      "artifact_checks_passed": false,
+      "reported_passed": null,
+      "error_type": "ConfigurationError",
+      "seconds": 36.026393,
+      "active_seconds": 32.221662,
+      "model_calls": 12,
+      "total_tokens": 69688,
+      "cached_input_tokens": 60032,
+      "usage_complete": true,
+      "tool_calls": 13,
+      "tool_errors": 1,
+      "reused_tasks": 0,
+      "case_sha256": "1dea2e689110ec5a7f9144d2c24c57a66f9cbbd132baa588f4c01e7273296c60",
+      "observation_sha256": "78d6447cbc36ba461f1b825bcb5beb7ff5709b59fd8f47a5e31c990d7d15eb81",
+      "repair_event_count": 0,
+      "final_checks": [
+        {
+          "command_sha256": "80adb82b9c42b06057ce390200bd770ef833ed34eeb2649ed7719b6cb9b2b4a9",
+          "exit_code": 0,
+          "marker_present": true
+        },
+        {
+          "command_sha256": "de7eeb8d8898179cd7cac6c2fc1ae63d217f53de1f34979c33eb88919176eae1",
+          "exit_code": 1,
+          "marker_present": false
+        },
+        {
+          "command_sha256": "0c8e8b55f65b3f2799a6b91cb1a0a25d948855c060e4512935ffa985040cb04c",
+          "exit_code": 1,
+          "marker_present": false
+        }
+      ],
+      "fingerprints_stable": true,
+      "unexpected_artifacts": [],
+      "budget_exhaustion_logged": true
+    }
+  ],
+  "summary": {
+    "variants": {
+      "single": {
+        "runs": 2,
+        "accepted": 2,
+        "not_accepted": 0,
+        "wrong_acceptances": 0,
+        "median_seconds": 23.238194,
+        "observed_model_calls": 14,
+        "missing_call_records": 0,
+        "observed_total_tokens": 73817,
+        "missing_token_records": 0
+      },
+      "fixed_team": {
+        "runs": 2,
+        "accepted": 0,
+        "not_accepted": 2,
+        "wrong_acceptances": 0,
+        "median_seconds": 34.805656,
+        "observed_model_calls": 24,
+        "missing_call_records": 0,
+        "observed_total_tokens": 127360,
+        "missing_token_records": 0
+      },
+      "custom": {
+        "runs": 2,
+        "accepted": 0,
+        "not_accepted": 2,
+        "wrong_acceptances": 0,
+        "median_seconds": 33.376329,
+        "observed_model_calls": 24,
+        "missing_call_records": 0,
+        "observed_total_tokens": 112780,
+        "missing_token_records": 0
+      }
+    },
+    "comparative_superiority_established": false,
+    "note": "Small exploratory observations, not a statistical superiority claim."
+  },
+  "limitations": [
+    "Two synthetic cases, one observation per condition; no statistical superiority",
+    "Provider sampling and host load are uncontrolled; reported cache usage is recorded",
+    "Fixed templates exclude planning variability; planning observations are separate",
+    "Finite behavioral checks, not proof against adversarial test-aware code"
+  ]
+}

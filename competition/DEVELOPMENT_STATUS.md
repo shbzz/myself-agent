@@ -1,3 +1,10 @@
+> Current checkpoint — 2026-10-31: six frozen real comparison observations are complete.
+> Single 2/2 accepted; fixed team 0/2 and custom 0/2 under the shared 12-call/run cap;
+> 5/6 artifacts pass final checks, but incomplete orchestration remains failure.
+> 62 calls / 313957 tokens total. No superiority claim. See EVALUATION_RESULTS_20261031.md.
+> PR #9 remains the deployed runtime; this evaluation increment requires no production data change.
+> Planner reliability, final frontend and contest submission materials remain.
+
 > Latest candidate, 2026-10-31: PR #9 human verification/continuation/rollback is merged and deployed.
 > This increment adds a private, frozen six-observation comparison CLI and two-module cases.
 > Read EVALUATION.md and RECOVERY.md. Paid comparison results are not yet recorded at this source
